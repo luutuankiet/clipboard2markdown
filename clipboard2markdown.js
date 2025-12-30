@@ -56,6 +56,44 @@
     },
 
     {
+      // Specialized rule for Confluence/Jira style code blocks.
+      filter: function (node) {
+        // We are looking for a DIV element that has the class 'code-block'.
+        return node.nodeName === 'DIV' && node.classList.contains('code-block');
+      },
+      replacement: function (content, node) {
+        // .textContent is a powerful tool. It grabs all the text inside
+        // the element, automatically stripping out all the messy inner HTML tags
+        // like <span> and <button>.
+        return '\n\n```\n' + node.textContent + '\n```\n\n';
+      }
+    },
+    {
+      // targeting code block for tripple backticks conversion
+      filter: function (node) {
+        // First, check for the basic <pre><code> structure
+        var isCodeBlock = node.nodeName === 'PRE' && node.firstChild.nodeName === 'CODE';
+        
+        // If it is a code block, ALSO check if it contains a newline.
+        // Both must be true to proceed.
+        if (isCodeBlock) {
+          return node.firstChild.textContent.includes('\n');
+        }
+        
+        return false; // Otherwise, it's not a match.
+      },
+
+      // --- The "THEN" Part ---
+      // If the filter passes, this function builds the Markdown string.
+      replacement: function (content, node) {
+        // 1. `\n\n\`\``\n`: Start with two newlines to separate from previous content, then the ```, then another newline.
+        // 2. `node.firstChild.textContent`: This is the crucial part. We grab the raw text content directly from the `<code>` tag inside the `<pre>`.
+        // 3. `\n\`\``\n\n`: End with a newline, the closing ```, and two more newlines for separation.
+        return '\n\n```\n' + node.firstChild.textContent + '\n```\n\n';
+      }
+    },
+    {
+      /// inline code block
       filter: function (node) {
         var hasSiblings = node.previousSibling || node.nextSibling;
         var isCodeBlock = node.parentNode.nodeName === 'PRE' && !hasSiblings;
