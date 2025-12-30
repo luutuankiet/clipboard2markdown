@@ -3,21 +3,22 @@
 
   // http://pandoc.org/README.html#pandocs-markdown
   var pandoc = [
-    {
-      filter: 'h1',
-      replacement: function (content, node) {
-        var underline = Array(content.length + 1).join('=');
-        return '\n\n' + content + '\n' + underline + '\n\n';
-      }
-    },
+  // revert to default header markdown styles
+    // {
+    //   filter: 'h1',
+    //   replacement: function (content, node) {
+    //     var underline = Array(content.length + 1).join('=');
+    //     return '\n\n' + content + '\n' + underline + '\n\n';
+    //   }
+    // },
 
-    {
-      filter: 'h2',
-      replacement: function (content, node) {
-        var underline = Array(content.length + 1).join('-');
-        return '\n\n' + content + '\n' + underline + '\n\n';
-      }
-    },
+    // {
+    //   filter: 'h2',
+    //   replacement: function (content, node) {
+    //     var underline = Array(content.length + 1).join('-');
+    //     return '\n\n' + content + '\n' + underline + '\n\n';
+    //   }
+    // },
 
     {
       filter: 'sup',
