@@ -36,7 +36,8 @@
     {
       filter: 'br',
       replacement: function () {
-        return '\\\n';
+        return '\n'; // removes soft breaks
+        // return '\\\n';
       }
     },
 
