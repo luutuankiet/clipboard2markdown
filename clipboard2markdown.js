@@ -49,8 +49,20 @@
       }
     },
 
+    // --- FIX #3: IMPROVED ITALIC LOGIC (Tags + CSS) ---
     {
-      filter: ['em', 'i', 'cite', 'var'],
+      filter: function (node) {
+        // 1. Check standard italic tags
+        var tags = ['EM', 'I', 'CITE', 'VAR'];
+        if (tags.indexOf(node.nodeName) !== -1) return true;
+
+        // 2. Check for CSS font-style="italic" (Common in Google Docs/AI output)
+        if (node.style && node.style.fontStyle === 'italic') {
+            return true;
+        }
+        
+        return false;
+      },
       replacement: function (content) {
         return '*' + content + '*';
       }
@@ -69,41 +81,51 @@
         return '\n\n```\n' + node.textContent + '\n```\n\n';
       }
     },
-    {
-      // targeting code block for tripple backticks conversion
-      filter: function (node) {
-        // First, check for the basic <pre><code> structure
-        var isCodeBlock = node.nodeName === 'PRE' && node.firstChild.nodeName === 'CODE';
-        
-        // If it is a code block, ALSO check if it contains a newline.
-        // Both must be true to proceed.
-        if (isCodeBlock) {
-          return node.firstChild.textContent.includes('\n');
-        }
-        
-        return false; // Otherwise, it's not a match.
-      },
 
-      // --- The "THEN" Part ---
-      // If the filter passes, this function builds the Markdown string.
+    // --- FIX #2: IMPROVED FENCED CODE BLOCK LOGIC ---
+    {
+      filter: function (node) {
+        // Check if it is a PRE tag
+        if (node.nodeName !== 'PRE') return false;
+
+        // Robust check: Look for a CODE tag inside, regardless of whitespace
+        // node.firstChild might be text (whitespace), so we use querySelector or children
+        var codeElement = node.querySelector('code');
+
+        if (codeElement) {
+          // Optional: Verify content has newlines if you strictly only want multiline blocks
+          // specific to your previous logic, though often PRE+CODE implies block regardless.
+          return true; // codeElement.textContent.includes('\n');
+        }
+
+        return false;
+      },
       replacement: function (content, node) {
-        // 1. `\n\n\`\``\n`: Start with two newlines to separate from previous content, then the ```, then another newline.
-        // 2. `node.firstChild.textContent`: This is the crucial part. We grab the raw text content directly from the `<code>` tag inside the `<pre>`.
-        // 3. `\n\`\``\n\n`: End with a newline, the closing ```, and two more newlines for separation.
-        return '\n\n```\n' + node.firstChild.textContent + '\n```\n\n';
+        // Robust retrieval of text content
+        var codeElement = node.querySelector('code');
+        var text = codeElement ? codeElement.textContent : node.textContent;
+
+        return '\n\n```\n' + text + '\n```\n\n';
       }
     },
+
+    // --- FIX #1: IMPROVED INLINE CODE LOGIC ---
     {
       /// inline code block
       filter: function (node) {
         var hasSiblings = node.previousSibling || node.nextSibling;
         var isCodeBlock = node.parentNode.nodeName === 'PRE' && !hasSiblings;
-        var isCodeElem = node.nodeName === 'CODE' ||
+
+        // Standard code tags
+        var isStandardCode = node.nodeName === 'CODE' ||
             node.nodeName === 'KBD' ||
             node.nodeName === 'SAMP' ||
             node.nodeName === 'TT';
 
-        return isCodeElem && !isCodeBlock;
+        // Custom Span with class 'inline-code' (Common in Google AI/Angular apps)
+        var isSpanCode = node.nodeName === 'SPAN' && node.classList.contains('inline-code');
+
+        return (isStandardCode || isSpanCode) && !isCodeBlock;
       },
       replacement: function (content) {
         return '`' + content + '`';
@@ -193,7 +215,6 @@
       }
   };
 
-  // http://stackoverflow.com/questions/2176861/javascript-get-clipboard-data-on-paste-event-cross-browser
   document.addEventListener('DOMContentLoaded', function () {
     var info = document.querySelector('#info');
     var pastebin = document.querySelector('#pastebin');
