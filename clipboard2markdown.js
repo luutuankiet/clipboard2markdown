@@ -69,6 +69,15 @@
     },
 
     {
+      filter: function (node) {
+        return node.nodeName === 'IMG' && node.getAttribute('src') && node.getAttribute('src').includes('a.slack-edge.com');
+      },
+      replacement: function () {
+        return '';
+      }
+    },
+
+    {
       // Specialized rule for Confluence/Jira style code blocks.
       filter: function (node) {
         // We are looking for a DIV element that has the class 'code-block'.
@@ -143,6 +152,8 @@
           return '<' + url + '>';
         } else if (url === ('mailto:' + content)) {
           return '<' + content + '>';
+        } else if (url && url.includes('slack.com/team')) {
+          return content;
         } else {
           return '[' + content + '](' + url + titlePart + ')';
         }
