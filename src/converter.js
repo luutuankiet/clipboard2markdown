@@ -21,6 +21,20 @@ turndownService.use(gfm);
 addAllRules(turndownService);
 
 // ===========================================
+// ESCAPE OVERRIDE (disable underscore escaping)
+// ===========================================
+// Turndown escapes ALL underscores by default (e.g., join_payment_provider → join\_payment\_provider).
+// This is overly aggressive — underscores mid-word don't trigger emphasis in CommonMark.
+// We override the escape method to remove underscore escaping while keeping other escapes.
+// See: https://github.com/mixmark-io/turndown/issues/233
+
+var originalEscape = turndownService.escape.bind(turndownService);
+turndownService.escape = function (string) {
+  // Apply default escaping, then unescape underscores
+  return originalEscape(string).replace(/\\_/g, '_');
+};
+
+// ===========================================
 // PRE-PROCESSING (HTML sanitization)
 // ===========================================
 
@@ -44,6 +58,7 @@ var escape = function (str) {
             .replace(/[\u2013\u2015]/g, '--')
             .replace(/\u2014/g, '---')
             .replace(/\u2026/g, '...')
+            .replace(/\{\{TABLE_BR\}\}/g, '<br>')  // Table cell line breaks
             .replace(/[ ]+\n/g, '\n')
             .replace(/\s*\\\n/g, '\\\n')
             .replace(/\s*\\\n\s*\\\n/g, '\n\n')

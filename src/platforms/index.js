@@ -2,16 +2,16 @@
 import jira from './jira.js';
 import slack from './slack.js';
 import common from './common.js';
+import confluence from './confluence.js';
 
 // Add other platforms here as they are created
-// import confluence from './confluence.js';
 // import notion from './notion.js';
 
 const allPlatforms = [
+  confluence,  // Must run before jira to clean up wrapper divs first
   jira,
   slack,
   common,
-  // confluence,
   // notion,
 ];
 

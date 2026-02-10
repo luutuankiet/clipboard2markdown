@@ -9,7 +9,7 @@ discuss
 </current_mode>
 
 <active_task>
-TASK-008: Implement an automated test runner to verify fixtures.
+None — ready for next task
 </active_task>
 
 <parked_tasks>
@@ -37,7 +37,7 @@ None
 </blockers>
 
 <next_action>
-Implement the automated test runner (TASK-008) by installing vitest and creating the test script.
+Create Slack test fixtures using the new "Copy Raw HTML" button. Run `npm run dev`, paste Slack content, click button to capture HTML.
 </next_action>
 
 ---
@@ -189,5 +189,78 @@ Implement the automated test runner (TASK-008) by installing vitest and creating
   3. Create matching `.md` expectation.
   4. Run `npm test`.
 
+### [LOG-011] - [FIX] - Disabled underscore escaping in Turndown - Task: TASK-008
+**Timestamp:** 2026-02-10
+**Details:**
+- **Issue:** Turndown escapes ALL underscores by default (e.g., `join_payment_provider` → `join\_payment\_provider`). This is overly aggressive — underscores mid-word don't trigger emphasis in CommonMark.
+- **Root Cause:** Turndown's default `escapes` array includes `[/_/g, '\\_']`.
+- **Fix:** Overrode `turndownService.escape` in `src/converter.js` to unescape underscores after default escaping:
+  ```javascript
+  var originalEscape = turndownService.escape.bind(turndownService);
+  turndownService.escape = function (string) {
+    return originalEscape(string).replace(/\\_/g, '_');
+  };
+  ```
+- **Fixture Updated:** `tests/fixtures/jira/jira_comments_with_table.md` corrected to expect unescaped underscores.
+- **Reference:** https://github.com/mixmark-io/turndown/issues/233
 
+### [LOG-012] - [FEATURE] - Added "Copy Raw HTML" button for fixture collection - Task: TASK-008
+**Timestamp:** 2026-02-10
+**Details:**
+- **Problem:** Platforms like Slack don't expose clipboard HTML in dev tools, making fixture collection difficult.
+- **Solution:** Added a "📋 Copy Raw HTML" button that appears after paste.
+- **Implementation:**
+  - `index.html`: Added button + status span in wrapper section.
+  - `clipboard2markdown.js`: Store `lastPastedHtml` on paste, button copies it to clipboard via `navigator.clipboard.writeText()`.
+- **Workflow:** Paste → Click button → Save HTML to `tests/fixtures/{platform}/{case}.html`.
+
+### [LOG-013] - [SETUP] - CI/CD pipeline implemented - Task: N/A
+**Timestamp:** 2026-02-10
+**Details:**
+- **Goal:** Automate testing on PRs, gate deployments behind passing tests.
+- **Architecture:** Two separate workflows for clean separation of concerns.
+- **Files Created/Modified:**
+  - `.github/workflows/ci.yml` (NEW): Runs `npm run test` on pull requests to `master`.
+  - `.github/workflows/static.yml` (MODIFIED): Added `test` job before `deploy`; deploy now `needs: test`.
+- **Behavior:**
+  - PRs to master → CI runs tests → blocks merge if fail
+  - Push to master → Tests run → Deploy only if tests pass
+  - Direct pushes to master still gated by test job in `static.yml`
+- **Node version:** 20 (LTS), with npm caching enabled for faster runs.
+
+### [LOG-014] - [FIX] - Slack conversion bugs fixed - Task: N/A
+**Timestamp:** 2026-02-10
+**Details:**
+- **Problem:** Slack test fixture failing — two converter bugs identified:
+  1. Ordered list items rendered on single line (`1. ...2. ...3. ...`)
+  2. Code blocks not fenced — Slack uses `<pre><div>` not `<pre><code>`
+- **Root Causes:**
+  - `fencedCodeBlock` rule required `PRE > CODE` structure; Slack's `<pre><div>` didn't match
+  - `listItem` rule missing trailing newline between items
+- **Fixes in `src/platforms/common.js`:**
+  1. `fencedCodeBlock`: Changed filter to match any `<pre>` element (removed `<code>` child requirement)
+  2. `listItem`: Added trailing `\n` to replacement output
+- **Result:** `npm test` passes, Slack fixtures now convert correctly
+
+### [LOG-015] - [FEATURE] - Confluence table and list support - Task: TASK-009
+**Timestamp:** 2026-02-10
+**Details:**
+- **Feature:** Added full support for complex Confluence content including nested tables, expand containers, and smart links.
+- **Challenges Solved:**
+  1. **Smart Links:** Confluence renders links as `<span data-inline-card>` with no `<a>` tag. Added sanitizer to convert them to proper anchors.
+  2. **Emoji Images:** Converted `<img data-emoji-text="💡">` to unicode characters.
+  3. **Table Headers:** Cleaned up complex nested `<div>` and sorting icons in `<th>` cells.
+  4. **Lists in Tables:** Markdown tables don't support lists. Implemented flattening logic to convert `<ul>/<li>` inside cells to inline text with `<br>` and `•` bullets.
+  5. **Mixed Content:** Handled cells containing both paragraphs and lists by inserting correct `<br>` separators.
+  6. **Empty Cells:** Added non-breaking spaces to empty cells to maintain table structure.
+- **Testing:** Added robust fixtures (`bullet.html`, `nested_table.html`, `table.html`) covering edge cases.
+- **Bug Fix:** Fixed issue where pasting new content appended to old content instead of replacing it.
+
+### [LOG-016] - [REFINE] - Test Fixture Alignment - Task: TASK-009
+**Timestamp:** 2026-02-10
+**Details:**
+- **Context:** Updated test fixtures to match improved converter output.
+- **Decision:** Accepted that `<p>Text</p><ul><li>List</li></ul>` should render as `Text<br>- List` in table cells (with explicit break) rather than running together.
+- **Action:** Updated `table.md` fixture to include `<br>` between text and lists, aligning the test expectation with the semantically correct converter output.
+- **Result:** All tests passing.
 

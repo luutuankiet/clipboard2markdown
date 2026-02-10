@@ -26,7 +26,7 @@ For sake of completeness below is the lineage for transaction costs up to `fct_t
 
 ### Key Code Snippets
 
-**Step 1: CASE statement in** `fct_transactions.sql` **(CTE: join\_payment\_provider)**
+**Step 1: CASE statement in** `fct_transactions.sql` **(CTE: join_payment_provider)**
 
 ```
 case
@@ -40,7 +40,7 @@ case
 end as payment_cost_source
 ```
 
-**Step 2: JOIN to seed in** `fct_transactions.sql` **(CTE: join\_trx\_costs)**
+**Step 2: JOIN to seed in** `fct_transactions.sql` **(CTE: join_trx_costs)**
 
 ```
 join_trx_costs as (

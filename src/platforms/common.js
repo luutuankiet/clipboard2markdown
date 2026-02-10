@@ -59,13 +59,11 @@ export default {
       }
     },
 
-    // Fenced code blocks (PRE > CODE)
+     // Fenced code blocks (PRE, with or without CODE child)
     {
       name: 'fencedCodeBlock',
       filter: function (node) {
-        if (node.nodeName !== 'PRE') return false;
-        var codeElement = node.querySelector('code');
-        return !!codeElement;
+        return node.nodeName === 'PRE';
       },
       replacement: function (content, node) {
         var codeElement = node.querySelector('code');
@@ -137,7 +135,7 @@ export default {
           }
         }
 
-        return prefix + content;
+        return prefix + content + '\n';
       }
     },
 

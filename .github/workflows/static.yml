@@ -34,7 +34,7 @@ jobs:
         run: npm run test
 
   deploy:
-    needs: test  # <-- Deploy only runs if test passes
+    needs: test
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
