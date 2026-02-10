@@ -14,6 +14,32 @@
 
 ## Active Loops
 
+### [LOOP-001] - Test automation strategy for platform rulesets - Status: Open
+**Created:** 2026-02-10 | **Source:** During TASK-006 planning | **Origin:** User
+
+**Context:**
+While discussing file organization for platform-specific conversion rules, user raised concern that manual testing won't scale as rulesets accumulate. Each platform (Jira, Confluence, Notion, Slack, Google) will have its own quirks and edge cases — manual verification becomes a maintenance burden.
+
+**Details:**
+Current test setup:
+- `tests/fixtures/{platform}/` contains `.html` input and `.expected.md` output pairs
+- No automated runner — verification is manual (paste, eyeball, compare)
+- CI can't simulate paste events (browser security)
+
+Options to explore:
+1. **Node.js + jsdom** — `npm test` runs unit tests on conversion logic, adds Node dependency
+2. **Playwright/Puppeteer** — Real browser automation, could simulate paste via clipboard API
+3. **Hybrid approach** — Node for unit tests (rules work correctly), agent-as-oracle for paste quality eval (clipboard integration works)
+4. **Browser-based test UI** — `test-runner.html` loads fixtures, runs conversions, shows diff
+
+Considerations:
+- GitHub Pages is static hosting (no server-side)
+- Want CI integration if possible (fail PR if conversion regresses)
+- Agent-as-oracle is useful for subjective quality but not for regression detection
+
+**Resolution:** _(pending — revisit after platforms/ refactor)_
+
+---
 
 ### [EXAMPLE-LOOP-001] - Client update workflow needs pull mechanism - Status: Open
 **Created:** 2026-01-23 | **Source:** During PHASE-001 planning | **Origin:** User

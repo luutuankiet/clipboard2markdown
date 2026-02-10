@@ -5,11 +5,11 @@
 ## 1. Current Understanding (Read First)
 
 <current_mode>
-execution — Turndown migration complete, investigating Jira table bug
+execution — Jira table fixed, investigating code block line break issue
 </current_mode>
 
 <active_task>
-TASK-005: Fix Jira table conversion (still broken after Turndown migration)
+TASK-006: Fix Jira code block line breaks (SQL appears on single line)
 </active_task>
 
 <parked_tasks>
@@ -27,14 +27,15 @@ DECISION-002: Debug bundle format is XML-tagged — agent-native, human-readable
 DECISION-003: Agent-as-oracle for testing — CI can't run paste events, LLM evaluates conversion quality
 DECISION-004: Vendor Turndown locally — reliability over CDN, works offline, consistent with project structure
 DECISION-005: Port all existing rules — no trimming, maintain feature parity during migration
+DECISION-006: Pre-process HTML before Turndown — sanitize platform quirks rather than fighting the library
 </decisions>
 
 <blockers>
-Jira tables still not converting — need to investigate HTML structure from Jira paste
+None
 </blockers>
 
 <next_action>
-Get raw HTML from Jira table paste, analyze why Turndown GFM plugin isn't matching
+Analyze Jira code block HTML structure — each line is a separate `<span>` with line numbers, need to preserve newlines
 </next_action>
 
 ---
@@ -80,6 +81,21 @@ Get raw HTML from Jira table paste, analyze why Turndown GFM plugin isn't matchi
   - `escape()` post-processor preserved (smart punctuation cleanup)
 - Initial test: basic cases work ✓
 - Blocker found: Jira tables still broken
+
+### [LOG-004] - [FIX] - Jira table conversion fixed via HTML pre-processing - Task: TASK-005
+**Timestamp:** 2026-02-10
+**Details:**
+- **Root cause:** Jira wraps table cell content in `<p data-renderer-start-pos="...">` tags
+- Turndown GFM plugin expects simple `<td>text</td>`, not nested `<p>` elements
+- **Fix approach:** Pre-process HTML before Turndown (sanitize, don't fight the library)
+- Added `sanitizeHTML()` function to `clipboard2markdown.js`:
+  - Strips `<p>` tags inside `<td>`/`<th>`, preserving content
+  - Removes empty `<span>` elements that interfere with parsing
+- Updated `convert()` to call `sanitizeHTML(str)` before `turndown()`
+- **Result:** Tables now convert correctly to markdown pipe format ✓
+- **Remaining issue:** SQL code blocks lose line breaks (all on one line)
+  - Jira's code block HTML structure needs investigation
+  - Likely similar pre-processing fix needed
 
 ---
 **Timestamp:** 2026-01-22 14:10

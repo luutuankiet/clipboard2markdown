@@ -1,20 +1,20 @@
-(function () {
-  'use strict';
+import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
 
-  // Initialize Turndown with options
-  var turndownService = new TurndownService({
-    headingStyle: 'atx',
-    hr: '---',
-    bulletListMarker: '-',
-    codeBlockStyle: 'fenced',
-    fence: '```',
-    emDelimiter: '*',
-    strongDelimiter: '**',
-    linkStyle: 'inlined'
-  });
+// Initialize Turndown with options
+var turndownService = new TurndownService({
+  headingStyle: 'atx',
+  hr: '---',
+  bulletListMarker: '-',
+  codeBlockStyle: 'fenced',
+  fence: '```',
+  emDelimiter: '*',
+  strongDelimiter: '**',
+  linkStyle: 'inlined'
+});
 
-  // Use GFM plugin (tables, strikethrough, task lists)
-  turndownService.use(turndownPluginGfm.gfm);
+// Use GFM plugin (tables, strikethrough, task lists)
+turndownService.use(gfm);
 
   // ===========================================
   // CUSTOM RULES (ported from pandoc array)
@@ -90,7 +90,27 @@
       return node.nodeName === 'DIV' && node.classList.contains('code-block');
     },
     replacement: function (content, node) {
-      return '\n\n```\n' + node.textContent + '\n```\n\n';
+      // Find the <code> element inside — don't use div.textContent (includes button text)
+      var codeEl = node.querySelector('code');
+      var text = '';
+
+      if (codeEl) {
+        // Clone so we can manipulate without affecting DOM
+        var clone = codeEl.cloneNode(true);
+        // Replace <br> with newlines (from our sanitizer)
+        clone.querySelectorAll('br').forEach(function(br) {
+          br.replaceWith('\n');
+        });
+        text = clone.textContent;
+        // Replace non-breaking spaces (from sanitizer) with regular spaces
+        text = text.replace(/\u00A0/g, ' ');
+      } else {
+        text = node.textContent;
+      }
+      
+      // Trim trailing whitespace from each line and overall
+      text = text.replace(/[ \t]+$/gm, '').trim();
+      return '\n\n```\n' + text + '\n```\n\n';
     }
   });
 
@@ -179,6 +199,52 @@
   var sanitizeHTML = function (html) {
     var doc = new DOMParser().parseFromString(html, 'text/html');
 
+    // ===========================================
+    // JIRA: Fix code block line breaks
+    // ===========================================
+    // Jira renders code blocks as spans per line inside <code>
+    // Pattern: <span data-testid="renderer-code-block-line-N">...</span>
+    // The textContent loses newlines between spans — we rebuild with explicit newlines
+    
+    doc.querySelectorAll('[data-ds--code--code-block] code').forEach(function (codeEl) {
+      // Find all line spans (Jira uses data-testid="renderer-code-block-line-N")
+      var lineSpans = codeEl.querySelectorAll('[data-testid^="renderer-code-block-line-"]');
+      
+      console.log('Jira Sanitizer: Found code block with', lineSpans.length, 'lines');
+
+      if (lineSpans.length > 0) {
+        // Build clean text with explicit newlines
+        var lines = [];
+        lineSpans.forEach(function (span) {
+          // Get text content, excluding line numbers
+          var lineText = '';
+          span.childNodes.forEach(function (child) {
+            // Skip line number spans
+            if (child.nodeType === 1 && (child.classList.contains('linenumber') || 
+                child.classList.contains('ds-line-number') ||
+                child.hasAttribute('data-ds--line-number'))) {
+              return;
+            }
+            lineText += child.textContent;
+          });
+          // Replace leading spaces with non-breaking spaces to survive HTML parsing
+          lineText = lineText.replace(/^ +/g, function(match) { 
+            return match.split('').map(function() { return '&nbsp;'; }).join(''); 
+          });
+          lines.push(lineText);
+        });
+        
+        // Use <br> to ensure newlines survive HTML serialization/parsing
+        var newHTML = lines.join('<br>');
+        
+        // Replace code element content with HTML containing <br>
+        codeEl.innerHTML = newHTML;
+      }
+    });
+
+    // ===========================================
+    // JIRA/CONFLUENCE: Fix table cell <p> tags
+    // ===========================================
     // Strip <p> tags inside table cells, keep content (Jira/Confluence quirk)
     doc.querySelectorAll('td p, th p').forEach(function (p) {
       p.replaceWith.apply(p, Array.prototype.slice.call(p.childNodes));
@@ -281,4 +347,3 @@
       }, 200);
     });
   });
-})();
