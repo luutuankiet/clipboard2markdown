@@ -1,0 +1,45 @@
+<p data-local-id="00000000-0000-0000-0000-000000000001" data-prosemirror-content-type="node" data-prosemirror-node-name="paragraph" data-prosemirror-node-block="true" data-pm-slice="0 0 []">To accurately map product groupings to SKUs - which is used by our warehouses to <a data-prosemirror-content-type="mark" data-prosemirror-mark-name="link">determine the parcel type for an order</a>
+ - we’re applying the code as an item attribute directly on item cards 
+in ERP System. This keeps the configuration maintainable by the Supply 
+team and visible for the rest of the org.</p><p data-local-id="00000000-0000-0000-0000-000000000001" data-prosemirror-content-type="node" data-prosemirror-node-name="paragraph" data-prosemirror-node-block="true">I’ve
+ set up an endpoint in ERP containing all item attributes associated 
+with specific SKUs, which can be used to export the product group code 
+associated with a specific product. It’s available at <span class="code" spellcheck="false" data-prosemirror-content-type="mark" data-prosemirror-mark-name="code">[https://api.example-erp.dynamics.com/v2.0/Production/api/ACME/EL/v1.0/itemAttributes](https://www.google.com/search?q=https://api.example-erp.dynamics.com/v2.0/Production/api/ACME/EL/v1.0/itemAttributes)</span> (read only).</p><h2 data-local-id="00000000-0000-0000-0000-000000000002" data-prosemirror-content-type="node" data-prosemirror-node-name="heading" data-prosemirror-node-block="true">Remaining tasks</h2><div data-node-type="actionList" data-task-list-local-id="00000000-0000-0000-0000-000000000003" style="list-style: none; padding-left: 0" data-prosemirror-content-type="node" data-prosemirror-node-name="taskList" data-prosemirror-node-block="true"><div data-task-local-id="00000000-0000-0000-0000-000000000004" data-task-state="TODO" data-prosemirror-content-type="node" data-prosemirror-node-name="taskItem" data-prosemirror-node-block="true">Add an <span class="code" spellcheck="false" data-prosemirror-content-type="mark" data-prosemirror-mark-name="code">itemAttributesStream</span> to <a data-prosemirror-content-type="mark" data-prosemirror-mark-name="link">tap-erp-system</a>, pointing to <span class="code" spellcheck="false" data-prosemirror-content-type="mark" data-prosemirror-mark-name="code">/itemAttributes</span></div><div data-task-local-id="00000000-0000-0000-0000-000000000005" data-task-state="TODO" data-prosemirror-content-type="node" data-prosemirror-node-name="taskItem" data-prosemirror-node-block="true">Create a task, job and schedule for the stream in DataTool</div><div data-task-local-id="00000000-0000-0000-0000-000000000006" data-task-state="TODO" data-prosemirror-content-type="node" data-prosemirror-node-name="taskItem" data-prosemirror-node-block="true">Push to production</div></div><p data-local-id="00000000-0000-0000-0000-000000000007" data-prosemirror-content-type="node" data-prosemirror-node-name="paragraph" data-prosemirror-node-block="true">For local testing, access the current ERP client secret in <a data-prosemirror-content-type="mark" data-prosemirror-mark-name="link">Secret manager</a>.</p><h2 data-local-id="00000000-0000-0000-0000-000000000008" data-prosemirror-content-type="node" data-prosemirror-node-name="heading" data-prosemirror-node-block="true">Endpoint schema</h2><pre class="code-block" style="--lineNumberGutterWidth:2ch;" data-language="json" data-prosemirror-content-type="node" data-prosemirror-node-name="codeBlock" data-prosemirror-node-block="true"><div class="code-block--start" contenteditable="false"></div><div class="code-block-content-wrapper"><div style="background-color: var(--ds-background-neutral, #0515240F); box-sizing: content-box; flex-shrink: 0; font-size: 0.875rem; padding: var(--ds-space-100, 8px); position: relative; width: var(--lineNumberGutterWidth, 2rem);" contenteditable="false"><div class="code-block-gutter-pseudo-element" style="color: var(--ds-text-subtlest, #6B6E76); font-family: var(--ds-font-family-code, &quot;Atlassian Mono&quot;, ui-monospace, Menlo, &quot;Segoe UI Mono&quot;, &quot;Ubuntu Mono&quot;, monospace); text-align: right; white-space: pre-wrap;" data-label="1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20"></div></div><div class="code-content"><code data-language="json" spellcheck="false" data-testid="code-block--code" aria-label="">{
+&nbsp; &nbsp; "guid": "00000000-0000-0000-0000-000000000001",
+&nbsp; &nbsp; "id": 1,
+&nbsp; &nbsp; "name": "Product group",
+&nbsp; &nbsp; "valueType": "Option",
+&nbsp; &nbsp; "blocked": false,
+&nbsp; &nbsp; "unitOfMeasure": "",
+&nbsp; &nbsp; "createdDateTime": "2026-01-01T08:00:00.000Z",
+&nbsp; &nbsp; "valueGuid": "00000000-0000-0000-0000-000000000002",
+&nbsp; &nbsp; "valueId": 3,
+&nbsp; &nbsp; "valueDateType": "0001-01-01",
+&nbsp; &nbsp; "valueNumericType": 0,
+&nbsp; &nbsp; "valueTextType": "DEMO",
+&nbsp; &nbsp; "valueBlocked": false,
+&nbsp; &nbsp; "itemNumber": "SKU000001",
+&nbsp; &nbsp; "lastModifiedDateTime": "2026-01-01T09:00:00.000Z",
+&nbsp; &nbsp; "auxiliaryIndex1": 1,
+&nbsp; &nbsp; "auxiliaryIndex2": 27,
+&nbsp; &nbsp; "auxiliaryIndex3": 1
+}</code></div></div><div class="code-block--end" contenteditable="false"></div></pre><p data-local-id="00000000-0000-0000-0000-000000000009" data-prosemirror-content-type="node" data-prosemirror-node-name="paragraph" data-prosemirror-node-block="true">Primary key: <span class="code" spellcheck="false" data-prosemirror-content-type="mark" data-prosemirror-mark-name="code">guid + valueGuid + SKU</span><br data-prosemirror-content-type="node" data-prosemirror-node-name="hardBreak" data-prosemirror-node-inline="true">Replication key: <span class="code" spellcheck="false" data-prosemirror-content-type="mark" data-prosemirror-mark-name="code">lastModifiedDateTime</span></p><p data-local-id="00000000-0000-0000-0000-000000000010" data-prosemirror-content-type="node" data-prosemirror-node-name="paragraph" data-prosemirror-node-block="true">Note that this endpoint lists all attributes, not just “Product group”.</p><canvas class="selection_highlighter_scroll_markers" width="32" height="1432"></canvas>

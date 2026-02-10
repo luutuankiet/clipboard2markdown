@@ -85,8 +85,9 @@ export default {
             node.nodeName === 'SAMP' ||
             node.nodeName === 'TT';
 
-        // Custom span.inline-code
-        var isSpanCode = node.nodeName === 'SPAN' && node.classList.contains('inline-code');
+        // Custom span.inline-code or span.code (Jira)
+        var isSpanCode = node.nodeName === 'SPAN' && 
+            (node.classList.contains('inline-code') || node.classList.contains('code'));
 
         return (isStandardCode || isSpanCode) && !isCodeBlock;
       },

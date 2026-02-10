@@ -20,8 +20,6 @@ For sake of completeness below is the lineage for transaction costs up to `fct_t
 
 @Charlie if it helps please scan from the seed node onwards (failure mode B ) is where we'll need your input on.
 
-[*live diagram*]([https://mermaid.live](https://mermaid.live) "[https://mermaid.live](https://mermaid.live)")
-
 ![demo-image-001.png](blob:[https://example.atlassian.net/00000000demo-image-001.png](https://example.atlassian.net/00000000demo-image-001.png))
 
 ### Key Code Snippets
