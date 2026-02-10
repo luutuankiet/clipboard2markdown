@@ -173,6 +173,26 @@
   });
 
   // ===========================================
+  // PRE-PROCESSING (HTML sanitization)
+  // ===========================================
+
+  var sanitizeHTML = function (html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+
+    // Strip <p> tags inside table cells, keep content (Jira/Confluence quirk)
+    doc.querySelectorAll('td p, th p').forEach(function (p) {
+      p.replaceWith.apply(p, Array.prototype.slice.call(p.childNodes));
+    });
+
+    // Remove empty spans that can interfere with table parsing
+    doc.querySelectorAll('td span:empty, th span:empty').forEach(function (span) {
+      span.remove();
+    });
+
+    return doc.body.innerHTML;
+  };
+
+  // ===========================================
   // POST-PROCESSING (smart punctuation cleanup)
   // ===========================================
 
@@ -199,7 +219,7 @@
   // ===========================================
 
   var convert = function (str) {
-    return escape(turndownService.turndown(str));
+    return escape(turndownService.turndown(sanitizeHTML(str)));
   };
 
   // ===========================================
