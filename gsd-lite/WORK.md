@@ -5,7 +5,7 @@
 ## 1. Current Understanding (Read First)
 
 <current_mode>
-execution
+discuss
 </current_mode>
 
 <active_task>
@@ -169,4 +169,25 @@ Implement the automated test runner (TASK-008) by installing vitest and creating
   - Updated `package.json` to add `vitest` script.
   - Created `tests/conversion.test.js` which recursively finds fixtures and verifies conversion.
 - **Next Steps:** User needs to run `npm install -D vitest jsdom` and `npm test` to verify.
+
+### [LOG-009] - [FIX] - Test Failure Resolution - Task: TASK-008
+**Timestamp:** 2026-02-10
+**Details:**
+- **Issue:** Test failed because Jira HTML contained `<button>Open image...</button>` text which polluted the Markdown output.
+- **Fix:** Added a generic `removeButtons` rule to `src/platforms/common.js` to strip all button elements.
+- **Status:** Tests passed after fix.
+- **Pivot:** Switching to discuss mode to explain testing workflow to user.
+
+### [LOG-010] - [INFO] - Testing Strategy Documented - Task: TASK-008
+**Timestamp:** 2026-02-10
+**Details:**
+- **Action:** Updated `ARCHITECTURE.md` to reflect the new modular structure and the testing strategy.
+- **Key Discovery:** The fixture-based testing model allows adding test cases without writing code (just files).
+- **Documented Workflow:**
+  1. Capture HTML from `pastebin`.
+  2. Save as `.html` fixture.
+  3. Create matching `.md` expectation.
+  4. Run `npm test`.
+
+
 

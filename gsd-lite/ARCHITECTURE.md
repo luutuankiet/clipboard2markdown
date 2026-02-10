@@ -58,44 +58,41 @@ sequenceDiagram
 
 ## Logic Outline
 
-### 1. Controller Logic (`clipboard2markdown.js`)
+### 1. UI Controller (`clipboard2markdown.js`)
 
-This file acts as the glue between the user, the browser, and the conversion engine.
-
-*   **Rule Configuration (`var pandoc = [...]`)**:
-    *   Defines an array of converter objects.
-    *   Each object has a `filter` (tag name or function) and a `replacement` function.
-    *   **Key Customizations**:
-        *   *Italics*: Matches `<i>`, `<em>`, and `style="font-style:italic"` (Google Docs support).
-        *   *Code Blocks*: detailed logic for `<pre>`, Jira/Confluence `div.code-block`, and Google AI `span.inline-code`.
-        *   *Cleanups*: Removes Slack-specific images and normalizes lists.
-
-*   **Helper Functions**:
-    *   `escape(str)`: Post-processing to fix smart quotes, dashes, and ensure proper Markdown whitespace/newlines.
-    *   `convert(str)`: The main bridge. Calls `toMarkdown(str)` passing in the `pandoc` rules + GFM options, then runs `escape()`.
-    *   `insert(myField, myValue)`: Cross-browser utility to insert text into a textarea at the cursor position.
-
+Acts as the thin glue layer between the browser and the conversion logic.
 *   **Event Orchestration**:
-    *   **Global `keydown`**: Listens for `Ctrl+V` / `Cmd+V`. Instantly clears the `#pastebin` div and focuses it so the browser pastes *there* instead of the body.
-    *   **`paste` on `#pastebin`**: Sets a 200ms timeout (critical hack). This delay allows the browser to finish rendering the pasted HTML into the div before the script tries to read `innerHTML`.
+    *   **Global `keydown`**: Listens for `Ctrl+V`. Clears/focuses `#pastebin` div.
+    *   **`paste` on `#pastebin`**: Sets a 200ms timeout to allow browser rendering, then reads `innerHTML`.
+    *   **Handoff**: Calls `convert(html)` from `src/converter.js` and displays result.
 
-### 2. Engine Logic (`to-markdown.js`)
+### 2. Core Conversion (`src/converter.js`)
 
-This library handles the heavy lifting of parsing and traversing the HTML.
+The pure logic module, decoupled from the DOM.
+*   **Initialization**: Configures `TurndownService` with GFM plugin and options.
+*   **Rule Loading**: Calls `addAllRules()` to register all platform-specific rules.
+*   **Pipeline**:
+    1.  `sanitizeHTML(str)`: Parses string to DOM, runs platform sanitizers (e.g., Jira table fix).
+    2.  `turndown(dom)`: Converts DOM to Markdown using registered rules.
+    3.  `escape(str)`: Post-processes text (smart quotes, whitespace cleanup).
 
-*   **Main Entry (`toMarkdown(input, options)`)**:
-    1.  **Parse**: Converts the input HTML string into a robust DOM structure using `htmlToDom` (wraps `DOMParser` or specific browser implementations).
-    2.  **Flatten**: Converts the tree into a linear array using `bfsOrder` (Breadth-First Search).
-    3.  **Process**: Iterates through the array in **reverse** (starting from deepest children).
+## Testing Strategy
 
-*   **Core Processing Loop (`process(node)`)**:
-    *   **Converter Matching**: Checks the node against the list of registered converters (from GFM defaults + user provided `pandoc` rules).
-    *   **Content Retrieval**: Calls `getContent(node)` to get the already-processed text of child nodes (since we iterate in reverse, children are already Markdown).
-    *   **Replacement**: Executes the matching converter's `replacement` function, passing the child content and the node itself.
-    *   **Storage**: Saves the resulting Markdown string into a temporary property `_replacement` on the node itself.
+The project uses a **fixture-based regression testing** approach powered by `vitest` and `jsdom`.
 
-*   **Whitespace Handling**:
-    *   `flankingWhitespace(node)`: intricate logic to determine if a node needs leading/trailing spaces based on its neighbors (e.g., `<b>bold</b>` inside text needs handling, but block elements might not).
+### Mechanism (`npm test`)
+1.  **Runner**: `tests/conversion.test.js` recursively scans `tests/fixtures/`.
+2.  **Discovery**: Finds all `.html` files (inputs) and matching `.md` files (expected outputs).
+3.  **Execution**:
+    *   Reads `.html` content.
+    *   Passes it to `convert()` (the same function the UI uses).
+    *   Asserts the output matches the `.md` content exactly.
+
+### How to Add a Test Case
+No code required. Just add data:
+1.  **Capture**: Save raw HTML (e.g. from `document.getElementById('pastebin').innerHTML`) to `tests/fixtures/{platform}/{case}.html`.
+2.  **Define**: Create `tests/fixtures/{platform}/{case}.md` with the expected Markdown.
+3.  **Verify**: Run `npm test`. The runner automatically picks up the new pair.
 
 ## Entry Points
 
