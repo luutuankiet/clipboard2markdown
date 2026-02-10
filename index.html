@@ -6,9 +6,8 @@
         <meta charset="utf-8">
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <link href="favicon.ico" rel="icon" type="image/x-icon">
-        <link rel="stylesheet" href="bootstrap.css">
-        <script src="to-markdown.js"></script>
-        <script src="clipboard2markdown.js"></script>
+        <link rel="stylesheet" href="assets/bootstrap.css">
+        <script type="module" src="/clipboard2markdown.js"></script>
         <style>
             h2 {
                 font-size: 22px;
@@ -43,7 +42,7 @@
             }
             @media (prefers-color-scheme: dark) {
                 body { 
-                    background-image: url('background-dark.svg');
+                    background-image: url('assets/background-dark.svg');
                     background-color: #222; 
                     color:white; 
                 }
@@ -68,10 +67,14 @@
                     <li>Paste it into this window (<code>Ctrl+V</code>, or <code>&#8984;+V</code> on Mac)</li>
                     <li>The converted Markdown will appear!</li>
                 </ol>
-                <p>The conversion is carried out by <a href="https://github.com/domchristie/to-markdown">to-markdown</a>, a Markdown converter written in JavaScript and running locally in the browser.</p>
+                <p>The conversion is carried out by <a href="https://github.com/mixmark-io/turndown">Turndown</a>, a Markdown converter written in JavaScript and running locally in the browser.</p>
             </section>
             <div contenteditable="true" id="pastebin"></div>
             <section class="hidden" id="wrapper">
+                <div style="margin-bottom: 10px;">
+                    <button id="copy-html-btn" style="font-size: 12px; padding: 4px 8px; cursor: pointer;">📋 Copy Raw HTML</button>
+                    <span id="copy-html-status" style="margin-left: 8px; font-size: 12px; color: #666;"></span>
+                </div>
                 <textarea id="output"></textarea>
             </section>
         </div>
