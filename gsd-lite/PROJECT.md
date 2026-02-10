@@ -43,12 +43,12 @@ These must work reliably:
 ## Success Criteria
 
 Project succeeds when:
-- [ ] HTML tables convert to proper Markdown tables (currently broken)
-- [ ] Fenced code blocks preserve correctly from various sources
-- [ ] Headers, inline code, and links convert reliably
-- [ ] Nested content (code in tables) doesn't break
-- [ ] Debug mode shows raw HTML + Markdown output for test collection
-- [ ] Test fixtures exist for regression prevention
+- [x] HTML tables from Jira/Confluence convert to proper Markdown tables.
+- [x] Fenced code blocks from Jira preserve newlines and indentation.
+- [ ] Headers, inline code, and links convert reliably across all major platforms.
+- [ ] An automated regression test suite (`npm test`) runs and passes, preventing regressions.
+- [ ] The project has a modern developer workflow using Vite for hot reloading (`npm run dev`).
+- [ ] Debug mode shows raw HTML + Markdown output for test fixture collection.
 
 ## Supported Sources
 
@@ -65,41 +65,41 @@ Project succeeds when:
 ## File Structure
 
 ```
-clipboard2markdown/
-├── index.html              # Main webapp entry
-├── clipboard2markdown.js   # Controller + custom rules
-├── to-markdown.js          # Engine (migrating to Turndown)
-├── bootstrap.css           # Styling
+.
+├── index.html                 # Main app entry point
+├── clipboard2markdown.js      # UI Controller (event handling)
+├── vite.config.js             # Vite build configuration
+├── package.json               # Project dependencies and scripts
 │
-├── gsd-lite/               # Project management
-│   ├── PROJECT.md          # This file
-│   ├── WORK.md             # Session logs
-│   └── ARCHITECTURE.md     # Codebase map
+├── src/
+│   └── platforms/             # Platform-specific logic
+│       ├── jira.js            # Jira rules and sanitizer
+│       ├── common.js          # Generic rules
+│       └── index.js           # Aggregator for all platforms
 │
-└── tests/
-    └── fixtures/           # Real-world test cases (sanitized)
-        ├── jira/
-        │   ├── table-01.html
-        │   ├── table-01.expected.md
-        │   ├── code-block-01.html
-        │   └── code-block-01.expected.md
-        ├── confluence/
-        │   └── ...
-        ├── notion/
-        │   └── ...
-        ├── slack/
-        │   └── ...
-        └── google-chat/
-            └── ...
+├── lib/                       # Third-party libraries (Turndown)
+│
+├── dist/                      # Production build output (generated)
+│
+├── tests/
+│   ├── fixtures/              # HTML/Markdown test pairs
+│   └── conversion.test.js     # Automated test runner script
+│
+└── gsd-lite/                  # Project management artifacts
+    ├── PROJECT.md             # This file
+    ├── WORK.md
+    └── ARCHITECTURE.md
 ```
 
 ## Context
 
 **Technical environment:**
-- Client-side JavaScript webapp (runs in browser)
-- Currently uses `to-markdown.js` (old fork) — migrating to Turndown.js
-- No server required — paste-based workflow is the auth bypass
-- Public GitHub repo — test fixtures need sanitization
+- Client-side JavaScript webapp built with Vite.
+- ES Modules for clean, modular code.
+- Uses Turndown.js as the core conversion engine.
+- Development via `npm run dev` (local dev server with hot reload).
+- Deployment via `npm run build` (generates static assets for hosting, e.g., on GitHub Pages).
+- Automated regression testing via `npm test`.
 
 **Prior work:**
 - Existing working webapp with custom rules for Jira, Confluence, Google Docs
@@ -115,18 +115,22 @@ clipboard2markdown/
 
 - **Public repo:** All committed content must be sanitized (no internal URLs, names, project codes)
 - **Browser-only:** No server-side processing — the paste-based approach IS the feature
-- **Manual testing:** CI can't auto-run paste events — agent-as-oracle for eval
+- **Automated Testing:** An `npm test` script uses `jsdom` to run all test fixtures in `tests/fixtures/` against the conversion logic, ensuring no regressions are introduced.
 - **Generic code fencing:** Don't try to detect language — just use ``` without hints
 
 ## Architecture Decision
 
-**Migrate from `to-markdown.js` → Turndown.js**
+### 1. Turndown.js Migration
+**Status:** Complete.
+**Rationale:** Turndown is the maintained successor to the original library, has better GFM support (tables), and an active community.
 
-Rationale:
-- Turndown is the maintained successor (same author, 10k+ stars)
-- GFM plugin has table support (likely fixes current bug)
-- Custom rules port from `pandoc` array → `addRule()` calls
-- Same client-side, paste-based architecture preserved
+### 2. Vite Build System
+**Status:** Complete.
+**Rationale:** Solves browser caching issues during development, provides a hot-reloading dev server for rapid feedback, and creates optimized, production-ready assets for deployment.
+
+### 3. Modular `platforms/` Architecture
+**Status:** In Progress.
+**Rationale:** Separates platform-specific logic (e.g., for Jira, Confluence) from the core UI controller. This makes the codebase easier to maintain, extend, and test. Each platform module exports its own sanitizers and rules.
 
 ## Planned Features
 
@@ -151,12 +155,12 @@ Toggle in UI to show raw HTML alongside Markdown output:
 
 ### Test Workflow
 
-1. Collect real HTML via debug mode
-2. Sanitize with LLM prompt (mask names, URLs, project codes)  
-3. Commit as test fixtures to `tests/fixtures/{platform}/`
-4. Agent evaluates conversion quality (pass/fail with rubric)
+1.  **Fixture Collection:** Use a "Debug Mode" in the UI to capture real-world pasted HTML.
+2.  **Sanitization:** Use an LLM prompt to remove sensitive information from the HTML.
+3.  **Fixture Creation:** Save the sanitized HTML as `tests/fixtures/{platform}/{test-case}.html` and the correct, desired output as `{test-case}.md`.
+4.  **Automated Verification:** Run `npm test`. The test runner will automatically find all fixture pairs, run the conversion, and fail if the output does not match the expected `.md` file.
 
-**Goal:** Regression prevention — don't break what works.
+**Goal:** Build a comprehensive test suite that prevents regressions and allows for confident refactoring.
 
 ---
 *Update when project scope changes*

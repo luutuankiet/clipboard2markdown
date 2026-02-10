@@ -9,4 +9,8 @@ export default defineConfig({
     },
   },
   base: '/clipboard2markdown/', // Important for GitHub Pages deployment
+  test: {
+    environment: 'jsdom',
+    globals: true, // Enables describe, it, expect globally
+  },
 });
