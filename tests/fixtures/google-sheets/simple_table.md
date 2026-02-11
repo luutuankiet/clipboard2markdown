@@ -1,0 +1,5 @@
+| No. | Skill | Objective | Exercise |
+| --- | --- | --- | --- |
+| 1 | Communication | You need to know how to communicate with nontechnical and technical people, thus being able to establish rapport and trust with people across the organization | Discuss with your Mentor during your 1on1 to set up exercise for you to practice these skills in real-world projects |
+| 2 | Project scoping | You need to understand how to scope and gather business and product requirements, how to ensure that your stakeholders agree with your assessment, and finally develop a sense of how data and technology decisions impact the business.<br> | Discuss with your Mentor during your 1on1 to set up exercise for you to practice these skills in real-world projects |
+| 3 | Agile, DevOps, and DataOps<br> | Understand the cultural foundations of Agile, DevOps, and DataOps.<br> | Discuss with your Mentor during your 1on1 to set up exercise for you to practice these skills in real-world projects |

@@ -3,12 +3,14 @@ import jira from './jira.js';
 import slack from './slack.js';
 import common from './common.js';
 import confluence from './confluence.js';
+import googleSheets from './google-sheets.js';
 
 // Add other platforms here as they are created
 // import notion from './notion.js';
 
 const allPlatforms = [
-  confluence,  // Must run before jira to clean up wrapper divs first
+  googleSheets, // Must run early to flatten colspan before GFM table processing
+  confluence,   // Must run before jira to clean up wrapper divs first
   jira,
   slack,
   common,
