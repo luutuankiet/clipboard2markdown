@@ -37,7 +37,7 @@ None
 </blockers>
 
 <next_action>
-Create Slack test fixtures using the new "Copy Raw HTML" button. Run `npm run dev`, paste Slack content, click button to capture HTML.
+Suggest: Add `tmp.html` as a permanent test fixture in `tests/fixtures/google-sheets/` to prevent future regressions.
 </next_action>
 
 ---
@@ -98,6 +98,66 @@ Create Slack test fixtures using the new "Copy Raw HTML" button. Run `npm run de
 - **Remaining issue:** SQL code blocks lose line breaks (all on one line)
   - Jira's code block HTML structure needs investigation
   - Likely similar pre-processing fix needed
+
+### [LOG-005] - [FEAT] - Google Sheets support implemented - Task: TASK-006
+**Timestamp:** 2026-02-10
+**Summary:** Implemented `google-sheets.js` platform module with sanitizer logic to handle merged cells (`colspan`) and line breaks (`<br>`) in tables, enabling clean Markdown table generation from Google Sheets copy-paste.
+
+**Context & Problem:**
+Copying from Google Sheets produces complex HTML that breaks standard Markdown converters:
+1.  **Merged Cells:** Sheets uses `colspan="N"` to span columns visually. Turndown GFM plugin expects 1:1 `<td>` per column mapping and outputs raw HTML when it encounters spans.
+2.  **Missing Headers:** Sheets uses `<td>` for the first row, but GFM requires `<th>` to recognize a table header.
+3.  **Line Breaks:** Cells with multiple lines use `<br>`, but Markdown tables must be single-line per row.
+
+**Solution Architecture:**
+We implemented a dedicated sanitizer in `src/platforms/google-sheets.js` that runs *before* Turndown (following the pattern established in [LOG-004] for Jira).
+
+```mermaid
+graph TD
+    A[Raw HTML Paste] --> B[Sanitizer: google-sheets.js]
+    B --> C{Is Google Sheet?}
+    C -- No --> D[Skip]
+    C -- Yes --> E[Flatten Colspans]
+    E --> F[Convert 1st Row to TH]
+    F --> G[Replace BR with Placeholder]
+    G --> H[Turndown Engine]
+    H --> I[Post-Processing]
+    I --> J[Restore BR from Placeholder]
+    J --> K[Final Markdown]
+```
+
+**Key Implementation Details:**
+
+1.  **Colspan Flattening (The "Visual Match" Strategy):**
+    We flatten merged cells to match the visual grid. A cell spanning 2 columns becomes 1 cell, and its "ghost" neighbor (an empty placeholder `<td>`) is removed.
+    *   **Logic:** Iterate `tr`, find `colspan="N"`, remove attribute. Then remove the next N-1 empty `<td>` elements.
+    *   **Result:** A 4-column visual table becomes a 4-column HTML table structure that GFM understands.
+
+2.  **Header Row Promotion:**
+    Explicitly convert the first `<tr>`'s children from `<td>` to `<th>`.
+    *   **Reasoning:** Turndown's GFM table rule strict check: `if (node.nodeName === 'TABLE' && hasThead(node))` — without `<th>`, it treats it as a layout table, not data.
+
+3.  **Line Break Preservation (The Placeholder Pattern):**
+    *   **Problem:** `<br>` inside a table cell breaks the single-line rule of Markdown tables.
+    *   **Fix:** Sanitize `<br>` → `{{TABLE_BR}}` string literal.
+    *   **Post-Process:** `src/converter.js` regex replaces `{{TABLE_BR}}` → `<br>` *after* Markdown generation.
+    *   **Code:**
+        ```javascript
+        // src/platforms/google-sheets.js
+        table.querySelectorAll('td br, th br').forEach(function (br) {
+          br.replaceWith('{{TABLE_BR}}');
+        });
+        ```
+    *   **Reference:** Same pattern used in Confluence logic (see `src/platforms/confluence.js`).
+
+**Dependencies:**
+-   **Upstream:** [LOG-004] (Sanitizer pattern established)
+-   **Modules:** `src/platforms/google-sheets.js`, `src/platforms/index.js` (registration)
+
+**Verification:**
+-   Input: `tests/fixtures/google-sheets/simple_table.html` (4x4 table with colspans)
+-   Output: Clean Markdown pipe table with `<br>` preserved in cells.
+-   Status: **Verified & Merged**.
 
 ---
 **Timestamp:** 2026-01-22 14:10
@@ -263,4 +323,59 @@ Create Slack test fixtures using the new "Copy Raw HTML" button. Run `npm run de
 - **Decision:** Accepted that `<p>Text</p><ul><li>List</li></ul>` should render as `Text<br>- List` in table cells (with explicit break) rather than running together.
 - **Action:** Updated `table.md` fixture to include `<br>` between text and lists, aligning the test expectation with the semantically correct converter output.
 - **Result:** All tests passing.
+
+### [LOG-017] - [FIX] - Google Sheets complex table support - Task: TASK-007
+**Timestamp:** 2026-02-11
+**Summary:** Implemented robust handling for complex Google Sheets tables including merged cells (rowspan/colspan), missing ghost cells, and pipe characters in links.
+
+**The Challenge:**
+Google Sheets HTML is notoriously difficult:
+1.  **Rowspan Ghosts:** A cell with `rowspan="N"` causes the next N-1 rows to physically miss that `<td>`. This breaks Markdown table generators which expect a rectangular grid.
+2.  **Colspan Logic:** A cell with `colspan="N"` is visually 1 column but physically covers N columns in the grid logic.
+3.  **Broken Links:** Links containing `|` characters (e.g. "Operations | Google Cloud") break Markdown tables by acting as column separators.
+4.  **Nested Breaks:** `<br>` tags inside links (`<a href>text<br></a>`) were causing breaks inside the link text.
+
+**The Solution (Pattern: Grid Reconstruction):**
+Instead of trying to patch the DOM in-place, we now:
+1.  **Reconstruct the Visual Grid:** Build a 2D array representing the table, filling in "ghost" cells created by rowspans with placeholders.
+2.  **Logical Column Counting:** Determine column count from the header row (logical cells) rather than the physical colgroup (which counts merged columns separately).
+3.  **Sanitize Links:** 
+    *   Move `<br>` out of `<a>` tags.
+    *   Replace `|` in link text with `{{PIPE}}` placeholder (restored as `\|` post-processing).
+
+**Key Algorithm:**
+```javascript
+// 1. Sanitize links (move <br>, placeholder pipes)
+// 2. Build 2D grid from rows
+// 3. For each cell:
+//    - If blocked by rowspan from above -> inject placeholder
+//    - If new cell -> use content, track its rowspan
+// 4. Rebuild DOM from grid
+```
+
+**Outcome:**
+*   Complex tables with mixed rowspans/colspans now render perfectly.
+*   Links with pipes work correctly inside tables.
+*   `tmp.html` case fully resolved.
+
+### [LOG-018] - [FIX] - Unescaped dashes in table cells - Task: TASK-007
+**Timestamp:** 2026-02-11
+**Summary:** Fixed regression where dashes at the start of lines inside table cells were being escaped (e.g., `\- item`).
+
+**Problem:**
+Turndown's default escape function is aggressive: it escapes any `-` at the start of a line because it *could* be a list marker. However, inside a Markdown table cell, block-level lists are not supported, so a literal `-` is valid and preferred for bullet-like formatting. Users relying on manual indentation + dashes (e.g., `<br> - sub-item`) saw inconsistent behavior depending on spacing.
+
+**Solution:**
+Updated the `turndownService.escape` override in `src/converter.js` to unescape dashes:
+```javascript
+return originalEscape(string)
+  .replace(/\\_/g, '_')
+  .replace(/\\-/g, '-'); // New: unescape dashes
+```
+
+**Outcome:**
+*   `\- Good ol'` -> `- Good ol'`
+*   Preserves indentation for manual nested lists (e.g., `  - item`).
+*   Verified with `tmp.html` case and existing regression tests.
+
 

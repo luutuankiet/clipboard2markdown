@@ -30,8 +30,13 @@ addAllRules(turndownService);
 
 var originalEscape = turndownService.escape.bind(turndownService);
 turndownService.escape = function (string) {
-  // Apply default escaping, then unescape underscores
-  return originalEscape(string).replace(/\\_/g, '_');
+  // Apply default escaping, then unescape underscores and dashes
+  // Dashes: Turndown escapes `-` at line start (potential list marker), but inside
+  // table cells this is overly aggressive — tables can't contain block-level lists.
+  // This preserves user's bullet-point formatting like "- item" in cells.
+  return originalEscape(string)
+    .replace(/\\_/g, '_')
+    .replace(/\\-/g, '-');
 };
 
 // ===========================================
@@ -59,6 +64,7 @@ var escape = function (str) {
             .replace(/\u2014/g, '---')
             .replace(/\u2026/g, '...')
             .replace(/\{\{TABLE_BR\}\}/g, '<br>')  // Table cell line breaks
+            .replace(/\{\{PIPE\}\}/g, '\\|')      // Escaped pipes in table cells
             .replace(/[ ]+\n/g, '\n')
             .replace(/\s*\\\n/g, '\\\n')
             .replace(/\s*\\\n\s*\\\n/g, '\n\n')

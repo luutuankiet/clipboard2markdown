@@ -1,58 +1,75 @@
-clipboard2markdown
-==================
+# Clipboard2Markdown
 
-> Easily convert richly formatted text or HTML to
-> [Markdown](http://daringfireball.net/projects/markdown/syntax).
-> Use the clipboard and paste to Markdown with a single keypress.
->
-> The conversion is carried out by
-> [to-markdown](https://github.com/domchristie/to-markdown),
-> a Markdown converter running in the browser.
+**Agent-Ready Markdown from Any Webpage.**
 
-Demo
-----
+A client-side tool that converts complex HTML (tables, code blocks, nested lists) from authenticated platforms into clean Markdown. Perfect for pasting context into AI agents without granting them API access.
 
-### Interactive
+## Why This Exists
 
-<http://luutuankiet.github.io/clipboard2markdown/>
+Workflow platforms don't let you copy as Markdown — you get rich text. But your AI agents need Markdown. And getting agents to authenticate to Jira/Confluence/Slack is painful or impossible.
 
-### Video
+**The solution:** Copy from any authenticated page → Paste here → Get clean Markdown → Paste to your agent.
+
+## Supported Platforms
+
+| Platform | Status | Notable Fixes |
+|----------|--------|---------------|
+| Jira | ✅ Full | Code blocks preserve newlines & indentation |
+| Confluence | ✅ Full | Smart links, emoji, lists inside tables |
+| Google Sheets | ✅ Full | Merged cells (rowspan/colspan), pipe escaping |
+| Slack | ✅ Full | Code blocks, list formatting |
+| Notion | 🔜 Planned | — |
+
+## Features
+
+- **🔄 Turndown.js Engine** — Robust GFM support (tables, task lists, strikethrough)
+- **🧹 Platform Sanitizers** — Pre-process quirky HTML before conversion
+- **🔒 100% Client-Side** — No data leaves your browser
+- **🧪 Automated Testing** — Fixture-based regression suite prevents breakage
+- **⚡ Vite Build System** — Hot reload dev server, optimized production builds
+
+## Demo
+
+**Live:** https://luutuankiet.github.io/clipboard2markdown/
 
 ![Screencast](screencast.gif)
 
-Usage
------
+## Development
 
-Open [index.html](index.html) in a favorite browser and hit `Ctrl+C`
-(or `⌘+C` on Mac).
+```bash
+# Install dependencies
+npm install
 
-To copy the converted Markdown to the clipboard, press `Ctrl+A`
-followed by `Ctrl+C` (or `⌘+A` and `⌘+C` on Mac).
+# Start dev server with hot reload
+npm run dev
 
-One can paste multiple times. This overwrites the previous conversion.
+# Run regression tests
+npm test
 
-### Tested browsers
+# Build for production
+npm run build
+```
 
--   Chrome 33 (Linux and OS X)
--   Firefox 27 (Linux)
--   Safari 5 (OS X)
--   Internet Explorer 11 (Windows)
+### Adding Test Cases
 
-About
------
+No code required — just add files:
 
-[clipboard2markdown](https://github.com/euangoddard/clipboard2markdown)
-was created by [Euan Goddard](https://github.com/euangoddard).
-The original version used
-[html2markdown](https://github.com/kates/html2markdown) by
-[Kates Gasis](https://github.com/kates) and
-[Himanshu Gilani](https://github.com/hgilani).
-[Vegard Øye](https://github.com/epsil) ported it to
-[to-markdown](https://github.com/domchristie/to-markdown) by
-[Dom Christie](https://github.com/domchristie). The HTML template
-is based on [Bootstrap](http://getbootstrap.com/).
+1. Save raw HTML to `tests/fixtures/{platform}/{case}.html`
+2. Create expected output in `tests/fixtures/{platform}/{case}.md`
+3. Run `npm test` — the runner auto-discovers new pairs
 
-### License
+**Tip:** Use the "📋 Copy Raw HTML" button in the app to capture clipboard HTML for fixtures.
+
+## Credits
+
+Forked from [clipboard2markdown](https://github.com/euangoddard/clipboard2markdown) by Euan Goddard.
+
+Modernized with:
+- [Turndown.js](https://github.com/mixmark-io/turndown) (replacing to-markdown)
+- [Vite](https://vitejs.dev/) build system
+- Platform-specific sanitizers for Jira, Confluence, Google Sheets, Slack
+
+## License
 
 [![License][license-image]][license-url]
 
