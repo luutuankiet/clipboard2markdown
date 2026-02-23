@@ -50,6 +50,7 @@ Project succeeds when:
 - [x] The project has a modern developer workflow using Vite for hot reloading (`npm run dev`).
 - [x] App opens directly in the main conversion view with a visible paste target that works on mobile and desktop.
 - [x] Preview mode provides trust UX: rendered input preview, raw HTML source, and markdown preview, plus copy buttons for raw HTML and converted markdown.
+- [x] Conversational platforms use a consistent annotation style (visible separators + italic metadata) so agents can parse Jira/Slack/Google Chat exports with minimal ambiguity.
 - [ ] Debug bundle export uses XML-tagged `<debug_bundle>` format for fixture collection.
 
 ## Supported Sources
@@ -63,6 +64,16 @@ Project succeeds when:
 | Google Chat | Medium | Messages |
 | Google Docs | Medium | Already has some support |
 | GitHub | Low | Already Markdown-native mostly |
+
+## Annotation Semantics Standard
+
+For conversation-like exports, preserve structure explicitly so downstream agents do not need platform-specific heuristics:
+
+- **Boundary marker:** visible separator between top-level threads or roots (for example `=== Thread 27064 ===` or `=== Root Chat 1 ===`).
+- **Metadata line:** italic annotation before content that captures role/thread position, author, and timestamp.
+- **Compatibility rule:** keep shape close across Jira, Slack, and Google Chat, then allow platform-specific tokens only where the source requires them.
+
+This standard is now part of product intent, not just implementation detail, so future platform modules should default to this pattern.
 
 ## File Structure
 

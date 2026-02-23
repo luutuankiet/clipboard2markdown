@@ -12,6 +12,8 @@
 | `package.json` | Project metadata and dependencies (`vite`, `turndown`). Defines `dev`, `build`, and `test` scripts. |
 | `src/platforms/` | **Core Logic**: Contains all platform-specific conversion logic. |
 | `src/platforms/jira.js` | Exports Jira-specific Turndown `rules` and a `sanitizer` function for pre-processing HTML. |
+| `src/platforms/slack.js` | Exports Slack-specific `rules` and `sanitizer` logic for headers, thread separators, replies, and unfurl annotations. |
+| `src/platforms/google-chat.js` | Exports Google Chat-specific `rules` and `sanitizer` logic for root-chat/reply annotation extraction. |
 | `src/platforms/common.js` | Exports rules and sanitizers that apply to all sources. |
 | `src/platforms/index.js` | **Aggregator**: Imports from all other platform files and exports `addAllRules` and `sanitize` helpers. |
 | `lib/` | Contains the core `turndown` and `turndown-plugin-gfm` libraries. |
@@ -84,6 +86,31 @@ The pure logic module, decoupled from the DOM.
     1.  `sanitizeHTML(str)`: Parses string to DOM, runs platform sanitizers (e.g., Jira table fix).
     2.  `turndown(dom)`: Converts DOM to Markdown using registered rules.
     3.  `escape(str)`: Post-processes text (smart quotes, whitespace cleanup).
+
+## Annotation Style Contract (Jira, Slack, Google Chat)
+
+To reduce ambiguity for human readers and AI agents, conversational platforms follow a shared annotation contract:
+
+1. **Boundary markers are explicit** (thread or root separators are visible markdown text).
+2. **Metadata is italicized** (author, reply lineage, timestamp, edited/external labels).
+3. **Raw markdown annotations bypass Turndown escaping** by using `data-*` attributes plus `\u200B` sentinel text where needed.
+
+### Canonical Shapes
+
+| Platform | Separator Shape | Metadata Shape | Mechanism |
+|---|---|---|---|
+| Jira | `=== Thread {id} ===` | `*[commentId ↩ parentId] Author - Date (edited)*` | `data-jira-thread`, `data-jira-annotation`, `\u200B` sentinel |
+| Slack | `*[thread: N replies]*` | `*(↩ reply)* Name [time]` and `*[service unfurl]*` | `data-slack-thread-sep`, `data-slack-reply-header`, `data-slack-unfurl` |
+| Google Chat | `=== Root Chat {n} ===` | `*[root n] Author - time*` or `*[reply r to root n] Author - time*` | `data-gchat-thread`, `data-gchat-annotation`, `\u200B` sentinel |
+
+### Extension Rules For Future Platforms
+
+When adding a new conversational source module under `src/platforms/`:
+1. Detect message boundaries and inject a visible separator style.
+2. Extract author/time/thread semantics into a single italic metadata line before message content.
+3. If markdown must remain unescaped, store text in `data-*` attributes and set `textContent = '\u200B'` so Turndown does not prune blank nodes.
+4. Register module in `src/platforms/index.js` and add fixture pairs in `tests/fixtures/{platform}/` that prove separator + metadata stability.
+5. Prefer shape compatibility with existing Jira/Slack/Google Chat patterns unless a platform constraint makes that impossible.
 
 ## Testing Strategy
 

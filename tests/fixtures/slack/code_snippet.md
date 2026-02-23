@@ -17,7 +17,7 @@ dbt ls -s result:error --state ./retry
 05:30:30  Running with dbt=1.10.15
 05:30:33  Registered adapter: bigquery=1.10.3
 05:30:35  Found 381 models, 13 snapshots, 564 data tests, 7 seeds, 2 operations, 124 sources, 1135 macros
-estrid_dw.marts.DM_ECOM.fct_ga4_event_purchases
-estrid_dw.marts.DM_SAL.fct_transactions
-estrid_dw.intermediate.orders.intr_orders
+redacted_dw.marts.DM_ECOM.fct_ga4_event_purchases
+redacted_dw.marts.DM_SAL.fct_transactions
+redacted_dw.intermediate.orders.intr_orders
 ```

@@ -9,7 +9,7 @@ discuss
 </current_mode>
 
 <active_task>
-None — ready for next task
+TASK-011 completed — cross-platform annotation contract is now documented in WORK, ARCHITECTURE, and PROJECT.
 </active_task>
 
 <parked_tasks>
@@ -34,6 +34,7 @@ DECISION-009: Jira comment thread annotations — visible italic headers `*[ID �
 DECISION-010: `data-attr + \u200B sentinel` pattern — reliable way to inject raw markdown through Turndown without escaping. Set `data-foo="raw text"` + `textContent='\u200B'` on element; custom rule reads attribute, ignores content.
 DECISION-011: UX trust mode uses three preview tabs — rendered input HTML, raw HTML source, and rendered markdown preview — while keeping markdown textarea as canonical copy output.
 DECISION-012: App opens directly in main conversion view with visible paste target; input box auto-collapses after paste and can be manually reopened.
+DECISION-013: Cross-platform annotation contract — preserve conversational structure with visible separators + italic metadata annotations, using `data-attr + \u200B` to bypass Turndown escaping and keep output agent-readable.
 </decisions>
 
 <blockers>
@@ -41,7 +42,7 @@ None
 </blockers>
 
 <next_action>
-Update `gsd-lite/ARCHITECTURE.md` to document preview tabs, input-collapse behavior, and mobile-first visible paste target.
+Prepare PR narrative (`PR.md`) and run `npm test` before merge.
 </next_action>
 
 ---
@@ -51,6 +52,9 @@ Update `gsd-lite/ARCHITECTURE.md` to document preview tabs, input-collapse behav
 ### Architecture Decisions
 - LOG-001: Turndown Migration — Replaced to-markdown.js with Turndown.js + GFM plugin
 - LOG-002: Project Reorganization — lib/, assets/, script/ folders for cleaner structure
+- LOG-019: Jira comment thread annotation pattern — `=== Thread X ===` + italic metadata headers.
+- LOG-020: Trust UX pattern — preview tabs + collapsible input to reduce ambiguity.
+- LOG-021: Cross-platform annotation contract — unified structure semantics for Jira, Slack, and Google Chat, with extension rules for future platforms.
 
 ---
 
@@ -413,11 +417,11 @@ Format:
 ```
 === Thread 27064 ===
 
-*[27064] Kiet Luu (Ken) - January 27, 2026 at 12:50 PM*
+*[27064] User - January 27, 2026 at 12:50 PM*
 
 ...content...
 
-*[27939 ↩ 27064] Kiet Luu (Ken) - February 5, 2026 at 3:36 PM*
+*[27939 ↩ 27064] User - February 5, 2026 at 3:36 PM*
 ```
 
 **Implementation — 3 rounds of debugging:**
@@ -540,3 +544,166 @@ graph TD
 **Fork paths:**
 - Continue execution → Update `gsd-lite/ARCHITECTURE.md` with new UI flow and controls
 - Discuss scope → Decide if `gsd-lite/PROJECT.md` should promote preview trust UX from implementation detail to explicit product criterion
+
+---
+### [LOG-021] - [DECISION] - Cross-platform annotation style contract documented from latest commit set - Task: TASK-011
+**Timestamp:** 2026-02-23 22:40
+**Depends On:** LOG-019 (Jira annotation baseline), LOG-020 (trust-focused output UX)
+
+---
+
+#### Executive Summary
+Reviewed `change.txt` and confirmed the latest commit set introduces Google Chat annotation support, wires it into the platform aggregator, and simplifies Slack unfurl annotation rendering. Based on that evidence, we now formalize a cross-platform annotation contract so future platform modules preserve thread semantics consistently instead of inventing per-platform one-off formats.
+
+#### What Changed In Code
+1. Added Google Chat module with separator and annotation rules, both backed by `data-*` attributes.
+2. Registered Google Chat in `src/platforms/index.js` so sanitizer/rules run in the shared pipeline.
+3. Refined Slack unfurl output to avoid redundant wording and keep annotation shape stable.
+
+#### What We Got Wrong And Pivoted
+Earlier implementation thinking was platform-local: Jira and Slack each solved their own annotation needs independently. That worked short-term but increased cognitive load for agents reading mixed exports. We pivoted to a project-level contract: all conversation-style platforms must emit explicit boundary markers and italic metadata annotations, then layer platform-specific details inside that same shape.
+
+#### Raw Evidence
+```javascript
+// Google Chat separator + annotation sentinels
+separatorEl.setAttribute('data-gchat-thread', '=== Root Chat ' + rootIndex + ' ===');
+separatorEl.textContent = '\u200B';
+annotationEl.setAttribute('data-gchat-annotation', parts.join(' '));
+annotationEl.textContent = '\u200B';
+```
+Source: `src/platforms/google-chat.js:133`, `src/platforms/google-chat.js:134`, `src/platforms/google-chat.js:154`, `src/platforms/google-chat.js:155`
+
+```javascript
+// Slack unfurl annotation output normalization
+return '\n\n*[' + node.getAttribute('data-slack-unfurl') + ']*\n\n';
+```
+Source: `src/platforms/slack.js:49`
+
+```markdown
+=== Thread 27064 ===
+*[27065 ↩ 27064] user1 - January 27, 2026 at 1:23 PM (edited)*
+
+=== Root Chat 1 ===
+*[reply 1 to root 1] You - 5:35 PM*
+
+*[thread: 2 replies]*
+*(↩ reply)* User2  [4:09 PM]
+```
+Source: `tests/fixtures/jira/comment_thread.md:1`, `tests/fixtures/jira/comment_thread.md:12`, `tests/fixtures/google-chat/thread_with_replies.md:1`, `tests/fixtures/google-chat/thread_with_replies.md:14`, `tests/fixtures/slack/thread_with_replies.md:8`, `tests/fixtures/slack/thread_with_replies.md:12`
+
+#### Decision Record
+**Chosen path:** Standardize annotation semantics across Jira, Slack, and Google Chat.
+- Core contract: explicit thread/root separators + italic metadata annotations.
+- Technical mechanism: `data-attr + \u200B` sentinel where raw markdown must bypass Turndown escaping.
+
+**Rejected path A:** Keep each platform fully custom with no shared annotation contract.
+- Why not: creates inconsistent exports and higher interpretation burden for agents.
+
+**Rejected path B:** Hide all metadata to keep output visually minimal.
+- Why not: removes critical context for reply lineage, ownership, and timeline reasoning.
+
+**Rejected path C:** Convert everything to nested blockquotes.
+- Why not: known breakage risk for embedded tables/code and weaker compatibility with current fixtures.
+
+#### Cross-Platform Annotation Flow
+```mermaid
+graph TD
+    A[Sanitizer detects platform specific chat structure] --> B[Inject data attributes with semantic labels]
+    B --> C[Inject zero width sentinel text]
+    C --> D[Turndown rule reads attributes]
+    D --> E[Emit stable markdown separators and italic annotations]
+    E --> F[Agents parse thread context consistently]
+```
+
+#### Dependency Chain
+- LOG-021 builds on LOG-019 for Jira's proven `data-attr + \u200B` annotation method.
+- LOG-021 builds on LOG-020 because trust-oriented UX requires clear, inspectable markdown semantics.
+- LOG-021 uses `change.txt:1`, `change.txt:169`, `change.txt:189` as evidence of the reviewed commit set.
+
+---
+
+📦 STATELESS HANDOFF
+**Layer 1 — Local Context:**
+→ Last action: LOG-021 (cross-platform annotation contract documented from latest commits)
+→ Dependency chain: LOG-021 ← LOG-019 ← LOG-020
+→ Next action: Update `gsd-lite/ARCHITECTURE.md` and `gsd-lite/PROJECT.md` with the contract so future platform implementations follow the same style by default.
+
+**Layer 2 — Global Context:**
+→ Architecture: Conversion remains `sanitize -> Turndown rules -> escape`, with platform modules registered in `src/platforms/index.js`.
+→ Patterns: DECISION-010 (`data-attr + \u200B`) and DECISION-013 (cross-platform annotation contract) govern metadata-safe markdown emission.
+
+**Fork paths:**
+- Continue execution → Add architecture/project documentation sections for annotation standards and extension checklist.
+- Pivot to implementation → Apply contract to next platform module and add fixture pair before merge.
+
+---
+### [LOG-022] - [EXEC] - Annotation contract propagated to ARCHITECTURE and PROJECT docs - Task: TASK-011
+**Timestamp:** 2026-02-23 22:48
+**Depends On:** LOG-021 (contract decision), LOG-020 (trust-oriented UX framing)
+
+---
+
+#### Executive Summary
+Executed the follow-through requested after LOG-021: updated architecture-level implementation guidance and project-level product intent so annotation consistency is now explicit policy for current and future conversational platforms.
+
+#### Files Updated
+- `gsd-lite/ARCHITECTURE.md`: added `google-chat.js` to structure map and introduced a dedicated "Annotation Style Contract" section with canonical shapes + extension checklist.
+- `gsd-lite/PROJECT.md`: promoted annotation consistency to a success criterion and added a project-level "Annotation Semantics Standard" section.
+- `gsd-lite/WORK.md`: recorded DECISION-013 and linked LOG-021 in Key Events Index.
+
+#### Raw Evidence
+```markdown
+## Annotation Style Contract (Jira, Slack, Google Chat)
+### Canonical Shapes
+### Extension Rules For Future Platforms
+```
+Source: `gsd-lite/ARCHITECTURE.md:90`, `gsd-lite/ARCHITECTURE.md:98`, `gsd-lite/ARCHITECTURE.md:106`
+
+```markdown
+- [x] Conversational platforms use a consistent annotation style (visible separators + italic metadata)
+## Annotation Semantics Standard
+- Boundary marker: visible separator between top-level threads or roots
+- Metadata line: italic annotation before content
+```
+Source: `gsd-lite/PROJECT.md:53`, `gsd-lite/PROJECT.md:68`, `gsd-lite/PROJECT.md:72`, `gsd-lite/PROJECT.md:73`
+
+#### Decision Record
+**Chosen path:** Document contract at both levels (architecture + project).
+- Why: architecture alone explains "how" but not durable product intent; project alone lacks implementation guardrails.
+
+**Rejected path A:** Document only in WORK log.
+- Why not: too ephemeral for future contributors scanning project docs first.
+
+**Rejected path B:** Document only in ARCHITECTURE.
+- Why not: does not clearly establish this as a product quality bar.
+
+#### Documentation Propagation Flow
+```mermaid
+graph TD
+    A[LOG-021 decision] --> B[WORK current decisions]
+    A --> C[ARCHITECTURE implementation contract]
+    A --> D[PROJECT product standard]
+    B --> E[Future agents and contributors read same policy]
+    C --> E
+    D --> E
+```
+
+#### Dependency Chain
+- LOG-022 operationalizes LOG-021 by moving the decision from execution log into canonical reference docs.
+- LOG-022 preserves alignment with LOG-020 trust UX goals by making output semantics explicit and reusable.
+
+---
+
+📦 STATELESS HANDOFF
+**Layer 1 — Local Context:**
+→ Last action: LOG-022 (annotation contract documentation propagated to ARCHITECTURE and PROJECT)
+→ Dependency chain: LOG-022 ← LOG-021 ← LOG-020
+→ Next action: Draft/update `PR.md` with commit narrative and run `npm test` for pre-merge verification.
+
+**Layer 2 — Global Context:**
+→ Architecture: Conversational platform modules follow shared separator + italic metadata contract and extension checklist.
+→ Patterns: DECISION-010 (`data-attr + \u200B`) for escape-safe metadata and DECISION-013 for cross-platform semantic consistency.
+
+**Fork paths:**
+- Continue execution → Prepare PR text and validation checklist.
+- Extend scope → Apply same contract to next platform module and add fixtures before implementation diverges.
