@@ -11,12 +11,12 @@ export default {
       }
     },
 
-    // Subscript
+    // Subscript — output plain text (no ~content~ since that's non-standard in GFM)
     {
       name: 'subscript',
       filter: 'sub',
       replacement: function (content) {
-        return '~' + content + '~';
+        return content;
       }
     },
 
@@ -129,8 +129,10 @@ export default {
         var parent = node.parentNode;
 
         if (/ol/i.test(parent.nodeName)) {
+          var start = parseInt(parent.getAttribute('start') || '1', 10);
           var index = Array.prototype.indexOf.call(parent.children, node) + 1;
-          prefix = index + '. ';
+          var listNumber = start + index - 1;
+          prefix = listNumber + '. ';
           while (prefix.length < 4) {
             prefix += ' ';
           }
