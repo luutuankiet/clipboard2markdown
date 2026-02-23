@@ -30,6 +30,8 @@ DECISION-005: Port all existing rules — no trimming, maintain feature parity d
 DECISION-006: Pre-process HTML before Turndown — sanitize platform quirks rather than fighting the library
 DECISION-007: Use Vite for the build system — solves browser caching and provides a modern dev environment.
 DECISION-008: Adopt a modular `platforms/` architecture — isolates platform-specific logic for maintainability.
+DECISION-009: Jira comment thread annotations — visible italic headers `*[ID ↩ parentID] Author - Date*` + `=== Thread X ===` separators. Blockquotes rejected (break code blocks/tables inside them).
+DECISION-010: `data-attr + \u200B sentinel` pattern — reliable way to inject raw markdown through Turndown without escaping. Set `data-foo="raw text"` + `textContent='\u200B'` on element; custom rule reads attribute, ignores content.
 </decisions>
 
 <blockers>
@@ -37,7 +39,6 @@ None
 </blockers>
 
 <next_action>
-Suggest: Add `tmp.html` as a permanent test fixture in `tests/fixtures/google-sheets/` to prevent future regressions.
 </next_action>
 
 ---
@@ -378,4 +379,71 @@ return originalEscape(string)
 *   Preserves indentation for manual nested lists (e.g., `  - item`).
 *   Verified with `tmp.html` case and existing regression tests.
 
+### [LOG-019] - [FIX+FEAT] - Jira comment bugs fixed + thread annotation implemented - Task: N/A
+**Timestamp:** 2026-02-23
+**Depends On:** LOG-004 (Jira table pre-processing pattern), LOG-011 (Turndown escape override pattern)
 
+---
+
+#### Bug Fixes (4 issues in Jira comment rendering)
+
+**Bug 1 — OL `start` attribute ignored** (`src/platforms/common.js`)
+Jira renders each numbered section as a separate `<ol start="N">` with a single `<li>`. The `listItem` rule used `Array.indexOf` which always returned `1`. Fixed by reading `parent.getAttribute('start')` and computing `start + index - 1`.
+
+**Bug 2 — Table with `<colgroup>` not converted** (`src/platforms/jira.js` sanitizer)
+`turndown-plugin-gfm`'s `isFirstTbody()` checks `previousSibling` — a `<colgroup>` before `<tbody>` caused it to return `false`, so the table fell back to raw HTML. Fixed by removing `table colgroup` elements in the sanitizer before Turndown runs.
+
+**Bug 3 — `<sub>` rendered as `~17~`** (`src/platforms/common.js`)
+The `subscript` rule wrapped content in `~text~`. In GFM, `~` is not standard subscript syntax. Changed to return plain content.
+
+**Bug 4 — Reaction emoji `<ul>` producing empty `- ` bullets** (`src/platforms/jira.js` sanitizer)
+Comment footers contain `<ul><li><br></li></ul>` reaction elements. Each `<li>` with only a `<br>` produced `- \n`. The `escape()` regex `\n-\n` → `\n` only collapsed some, leaving stray `-` lines. Fixed by removing `[data-testid$="-footer"]` elements in the sanitizer.
+
+---
+
+#### Feature — Jira Comment Thread Annotations
+
+**Design decision (DECISION-009):**
+Jira comment threads have no markdown equivalent. After discussing options (flat, blockquote indentation, custom annotations), chose visible italic annotations with `=== Thread X ===` separators. Blockquotes rejected because they break code blocks and tables inside them.
+
+Format:
+```
+=== Thread 27064 ===
+
+*[27064] Kiet Luu (Ken) - January 27, 2026 at 12:50 PM*
+
+...content...
+
+*[27939 ↩ 27064] Kiet Luu (Ken) - February 5, 2026 at 3:36 PM*
+```
+
+**Implementation — 3 rounds of debugging:**
+
+*Round 1 — Escape pass corrupting annotations:*
+Initial approach used `em.textContent = '[ID] Author'` which goes through Turndown's escape pass, producing `\[ID\]` and `\=== Thread ===`. Fixed by switching to `data-` attributes + custom Turndown rules (`jiraThreadSeparator`, `jiraCommentAnnotation`) that read from the attribute and return raw markdown strings, bypassing the escape pass entirely.
+
+*Round 2 — Turndown blank-node pruning (DECISION-010):*
+`<p data-jira-annotation="...">` with no children has empty `textContent`. Turndown's `isBlank()` (`/^\s*$/.test(node.textContent)`) fires in `forNode()` before custom rules are checked — annotations were silently dropped. Fixed by setting `textContent = '\u200B'` (zero-width space, not matched by `\s`) as a sentinel. The custom rule ignores `content` and reads from the attribute.
+
+*Round 3 — Activity feed guard for non-regression:*
+All annotation logic is guarded by `doc.querySelector('[data-testid="issue-activity-feed..."]')` — ensures ticket descriptions and other Jira components are untouched.
+
+**Partial copy degradation:** Falls back from `comment-in-view-wrapper` nesting → `comment-base-item` span nesting → ID-only annotation if header is stripped.
+
+---
+
+📦 STATELESS HANDOFF
+**Layer 1 — Local Context:**
+→ Last action: LOG-019 — Jira comment bugs fixed + thread annotation feature shipped
+→ Dependency chain: LOG-019 ← LOG-004 (Jira pre-processing) ← LOG-011 (escape override)
+→ Next action: Add test fixture `tests/fixtures/jira/comment_thread.html` + `.md`
+
+**Layer 2 — Global Context:**
+→ Architecture: Pre-process in sanitizers → Turndown rules → `escape()` post-process
+→ Patterns: DECISION-010 — `data-attr + \u200B` bypasses Turndown escape without corrupting output
+
+**Fork paths:**
+- Add fixture → create `tests/fixtures/jira/comment_thread.html` + `.md`
+- New task → check WORK.md parked tasks
+
+---
