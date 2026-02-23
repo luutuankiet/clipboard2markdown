@@ -46,9 +46,11 @@ Project succeeds when:
 - [x] HTML tables from Jira/Confluence convert to proper Markdown tables.
 - [x] Fenced code blocks from Jira preserve newlines and indentation.
 - [ ] Headers, inline code, and links convert reliably across all major platforms.
-- [ ] An automated regression test suite (`npm test`) runs and passes, preventing regressions.
-- [ ] The project has a modern developer workflow using Vite for hot reloading (`npm run dev`).
-- [ ] Debug mode shows raw HTML + Markdown output for test fixture collection.
+- [x] An automated regression test suite (`npm test`) runs and passes, preventing regressions.
+- [x] The project has a modern developer workflow using Vite for hot reloading (`npm run dev`).
+- [x] App opens directly in the main conversion view with a visible paste target that works on mobile and desktop.
+- [x] Preview mode provides trust UX: rendered input preview, raw HTML source, and markdown preview, plus copy buttons for raw HTML and converted markdown.
+- [ ] Debug bundle export uses XML-tagged `<debug_bundle>` format for fixture collection.
 
 ## Supported Sources
 
@@ -136,9 +138,16 @@ Project succeeds when:
 
 ### Debug Mode
 
-Toggle in UI to show raw HTML alongside Markdown output:
-- "Copy Debug Bundle" button exports XML-tagged format
-- Enables test fixture collection and agent-based evaluation
+**Status:** Partially implemented.
+
+Implemented now:
+- Preview mode with three tabs: rendered input preview, raw HTML source, markdown preview
+- "Copy Raw HTML" and "Copy Converted Markdown" actions for fixture and workflow convenience
+- Mobile-friendly main landing flow with visible paste target
+
+Still planned:
+- "Copy Debug Bundle" button that exports XML-tagged format
+- Bundle is designed for agent-based evaluation and fixture authoring
 
 ```xml
 <debug_bundle>
@@ -155,7 +164,7 @@ Toggle in UI to show raw HTML alongside Markdown output:
 
 ### Test Workflow
 
-1.  **Fixture Collection:** Use a "Debug Mode" in the UI to capture real-world pasted HTML.
+1.  **Fixture Collection:** Use the preview mode and "Copy Raw HTML" action in the UI to capture real-world pasted HTML.
 2.  **Sanitization:** Use an LLM prompt to remove sensitive information from the HTML.
 3.  **Fixture Creation:** Save the sanitized HTML as `tests/fixtures/{platform}/{test-case}.html` and the correct, desired output as `{test-case}.md`.
 4.  **Automated Verification:** Run `npm test`. The test runner will automatically find all fixture pairs, run the conversion, and fail if the output does not match the expected `.md` file.

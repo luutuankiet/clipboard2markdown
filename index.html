@@ -22,11 +22,50 @@
                 margin-bottom: 10vh;
                 margin-top: 10vh;
             }
+            #info {
+                margin-bottom: 12px;
+            }
+            #info p {
+                margin-bottom: 8px;
+            }
+            #info ul {
+                margin: 0 0 8px 18px;
+            }
             #pastebin {
-                opacity: 0.01;
+                background: #fff;
+                border: 1px dashed #9aa4af;
+                border-radius: 8px;
+                margin-bottom: 12px;
+                min-height: 110px;
+                overflow: auto;
+                padding: 10px 12px;
                 width: 100%;
-                height: 1px;
-                overflow: hidden;
+            }
+            #pastebin:focus {
+                border-color: #1f6feb;
+                box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.18);
+                outline: none;
+            }
+            #pastebin:empty:before {
+                color: #66707a;
+                content: attr(data-placeholder);
+            }
+            .action-bar {
+                align-items: center;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 10px;
+            }
+            .action-btn {
+                cursor: pointer;
+                font-size: 12px;
+                padding: 4px 8px;
+            }
+            #copy-status {
+                color: #666;
+                font-size: 12px;
+                min-height: 18px;
             }
             #output {
                 border: none;
@@ -40,11 +79,119 @@
                 resize: none;
                 width: 100%;
             }
+            #preview-panel {
+                border: 1px solid #d8dde3;
+                border-radius: 8px;
+                min-height: 62vh;
+                overflow: hidden;
+            }
+            .preview-tabs {
+                background: #f4f6f8;
+                border-bottom: 1px solid #d8dde3;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                padding: 8px;
+            }
+            .preview-tab {
+                background: #fff;
+                border: 1px solid #c9d2db;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 12px;
+                padding: 6px 10px;
+            }
+            .preview-tab.active {
+                background: #1f6feb;
+                border-color: #1f6feb;
+                color: #fff;
+            }
+            .preview-pane {
+                display: none;
+                max-height: 60vh;
+                min-height: 60vh;
+                overflow: auto;
+                padding: 14px;
+            }
+            .preview-pane.active {
+                display: block;
+            }
+            #preview-input-frame {
+                background: #fff;
+                border: 1px solid #d8dde3;
+                border-radius: 6px;
+                height: 100%;
+                min-height: 56vh;
+                width: 100%;
+            }
+            #preview-raw-code {
+                background: #f6f8fa;
+                border: 1px solid #d8dde3;
+                border-radius: 6px;
+                display: block;
+                font-family: Consolas, "Liberation Mono", Courier, monospace;
+                font-size: 12px;
+                line-height: 1.4;
+                margin: 0;
+                overflow-x: auto;
+                padding: 12px;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+            #markdown-preview {
+                font-size: 14px;
+                line-height: 1.6;
+            }
+            #markdown-preview table {
+                border-collapse: collapse;
+                margin: 10px 0;
+                width: 100%;
+            }
+            #markdown-preview th,
+            #markdown-preview td {
+                border: 1px solid #d0d7de;
+                padding: 6px 8px;
+                vertical-align: top;
+            }
+            #markdown-preview pre {
+                background: #f6f8fa;
+                border: 1px solid #d8dde3;
+                border-radius: 6px;
+                overflow: auto;
+                padding: 10px;
+            }
+            #markdown-preview code {
+                background: #f0f3f6;
+                border-radius: 3px;
+                padding: 1px 4px;
+            }
+            #markdown-preview pre code {
+                background: transparent;
+                padding: 0;
+            }
+            #wrapper.preview-mode #output {
+                display: none;
+            }
+            @media (max-width: 900px) {
+                #output {
+                    min-height: 50vh;
+                }
+                #preview-panel {
+                    min-height: 50vh;
+                }
+                .preview-pane {
+                    max-height: 48vh;
+                    min-height: 48vh;
+                }
+                #preview-input-frame {
+                    min-height: 44vh;
+                }
+            }
             @media (prefers-color-scheme: dark) {
-                body { 
+                body {
                     background-image: url('assets/background-dark.svg');
-                    background-color: #222; 
-                    color:white; 
+                    background-color: #222;
+                    color: white;
                 }
                 code {
                     color: #ff7a9c;
@@ -53,6 +200,42 @@
                 a {
                     color: #8fcbff;
                 }
+                #copy-status {
+                    color: #bbb;
+                }
+                #pastebin {
+                    background: #1b1f25;
+                    border-color: #4a4f57;
+                }
+                #pastebin:empty:before {
+                    color: #98a2ad;
+                }
+                #preview-panel {
+                    border-color: #4a4f57;
+                    background: #15181d;
+                }
+                .preview-tabs {
+                    background: #1f232a;
+                    border-bottom-color: #4a4f57;
+                }
+                .preview-tab {
+                    background: #2b313b;
+                    border-color: #4a4f57;
+                    color: #f0f3f6;
+                }
+                .preview-tab.active {
+                    background: #2f81f7;
+                    border-color: #2f81f7;
+                    color: #fff;
+                }
+                #preview-raw-code,
+                #markdown-preview pre {
+                    background: #0f1115;
+                    border-color: #3a3f47;
+                }
+                #markdown-preview code {
+                    background: #1f232a;
+                }
             }
         </style>
     </head>
@@ -60,22 +243,41 @@
         <div class="container">
             <section id="info">
                 <h1>Paste to Markdown</h1>
-                <h2>Instructions</h2>
-                <ol>
-                    <li>Find the text to convert to Markdown (<i>e.g.</i>, in another browser tab)</li>
-                    <li>Copy it to the clipboard (<code>Ctrl+C</code>, or <code>&#8984;+C</code> on Mac)</li>
-                    <li>Paste it into this window (<code>Ctrl+V</code>, or <code>&#8984;+V</code> on Mac)</li>
-                    <li>The converted Markdown will appear!</li>
-                </ol>
-                <p>The conversion is carried out by <a href="https://github.com/mixmark-io/turndown">Turndown</a>, a Markdown converter written in JavaScript and running locally in the browser.</p>
+                <p>The app starts directly in conversion mode. Paste copied rich content below, then compare input and output in Preview.</p>
+                <ul>
+                    <li>Desktop: <code>Ctrl+V</code> or <code>&#8984;+V</code></li>
+                    <li>Mobile: tap the paste box, then long-press and choose Paste</li>
+                </ul>
+                <p>Conversion runs locally in your browser using <a href="https://github.com/mixmark-io/turndown">Turndown</a>.</p>
             </section>
-            <div contenteditable="true" id="pastebin"></div>
-            <section class="hidden" id="wrapper">
-                <div style="margin-bottom: 10px;">
-                    <button id="copy-html-btn" style="font-size: 12px; padding: 4px 8px; cursor: pointer;">📋 Copy Raw HTML</button>
-                    <span id="copy-html-status" style="margin-left: 8px; font-size: 12px; color: #666;"></span>
+            <div contenteditable="true" data-placeholder="Tap here, then paste your copied content" id="pastebin"></div>
+            <section id="wrapper">
+                <div class="action-bar">
+                    <button class="action-btn" id="toggle-input-btn">📥 Hide Input Box</button>
+                    <button class="action-btn" id="copy-html-btn">📋 Copy Raw HTML</button>
+                    <button class="action-btn" id="copy-md-btn">📝 Copy Converted Markdown</button>
+                    <button class="action-btn" id="toggle-preview-btn">👀 Show Preview</button>
+                    <span id="copy-status"></span>
                 </div>
+
                 <textarea id="output"></textarea>
+
+                <section class="hidden" id="preview-panel">
+                    <div class="preview-tabs">
+                        <button class="preview-tab active" data-view="input" type="button">📥 Input</button>
+                        <button class="preview-tab" data-view="raw" type="button">🧾 Raw HTML</button>
+                        <button class="preview-tab" data-view="markdown" type="button">📝 Markdown Preview</button>
+                    </div>
+                    <div class="preview-pane active" id="preview-pane-input">
+                        <iframe id="preview-input-frame" sandbox=""></iframe>
+                    </div>
+                    <div class="preview-pane" id="preview-pane-raw">
+                        <pre><code id="preview-raw-code"></code></pre>
+                    </div>
+                    <div class="preview-pane" id="preview-pane-markdown">
+                        <article id="markdown-preview"></article>
+                    </div>
+                </section>
             </section>
         </div>
     </body>

@@ -1,13 +1,13 @@
 # Architecture
 
-*Mapped: 2026-02-10*
+*Mapped: 2026-02-10 | Updated: 2026-02-23*
 
 ## Project Structure Overview
 
 | File / Directory | Purpose |
 |---|---|
-| `index.html` | Main application entry point. Loads the main script as an ES Module. |
-| `clipboard2markdown.js` | **UI Controller**: Handles DOM events (paste, keydown) and orchestrates the conversion process. Imports logic from `src/platforms`. |
+| `index.html` | Main application entry point and UI surface. Contains paste target, output textarea, preview panel tabs, and action controls. |
+| `clipboard2markdown.js` | **UI Controller**: Handles DOM events (paste, keydown, button clicks), orchestrates conversion, manages preview modes, and copy actions. Imports logic from `src/platforms`. |
 | `vite.config.js` | Vite build configuration. Defines the output directory (`dist/`) and base path for deployment. |
 | `package.json` | Project metadata and dependencies (`vite`, `turndown`). Defines `dev`, `build`, and `test` scripts. |
 | `src/platforms/` | **Core Logic**: Contains all platform-specific conversion logic. |
@@ -36,35 +36,44 @@ sequenceDiagram
     participant User
     participant Browser
     participant UIController as clipboard2markdown.js
+    participant Converter as src/converter.js
     participant Aggregator as src/platforms/index.js
     participant Sanitizers as Jira, Common Sanitizers
     participant Engine as Turndown.js
     participant Rules as Jira, Common Rules
 
-    User->>Browser: Pastes HTML content
-    Browser->>UIController: 'paste' event triggered
-    UIController->>UIController: Reads pasted innerHTML
-    UIController->>Aggregator: Calls master sanitize(html)
-    Aggregator->>Sanitizers: Runs each platform's sanitizer function on the DOM
-    Sanitizers-->>Aggregator: Mutated DOM is ready
-    Aggregator-->>UIController: Returns sanitized HTML string
-    UIController->>Engine: turndown(sanitizedHtml)
+    User->>Browser: Paste into input box
+    Browser->>UIController: paste event on pastebin
+    UIController->>UIController: Read pastebin innerHTML
+    UIController->>Converter: convert(html)
+    Converter->>Aggregator: sanitizeHTML(html)
+    Aggregator->>Sanitizers: Apply platform sanitizers
+    Sanitizers-->>Converter: Sanitized HTML
+    Converter->>Engine: turndown(sanitizedHtml)
     loop Turndown Processing
-        Engine->>Rules: Matches nodes against all registered platform rules
+        Engine->>Rules: Match nodes against registered rules
     end
-    Engine-->>UIController: Final Markdown String
-    UIController->>User: Displays Markdown in output
+    Engine-->>Converter: Markdown string
+    Converter-->>UIController: Converted markdown
+    UIController->>UIController: Update textarea, preview tabs, copy state
+    UIController->>User: Show markdown output and optional preview modes
 ```
 
 ## Logic Outline
 
 ### 1. UI Controller (`clipboard2markdown.js`)
 
-Acts as the thin glue layer between the browser and the conversion logic.
+Acts as the thin glue layer between browser interactions and conversion logic.
 *   **Event Orchestration**:
-    *   **Global `keydown`**: Listens for `Ctrl+V`. Clears/focuses `#pastebin` div.
-    *   **`paste` on `#pastebin`**: Sets a 200ms timeout to allow browser rendering, then reads `innerHTML`.
-    *   **Handoff**: Calls `convert(html)` from `src/converter.js` and displays result.
+    *   **Global `keydown`**: Listens for `Ctrl+V`/`Cmd+V`, reopens the paste target if collapsed, then focuses it.
+    *   **`paste` on `#pastebin`**: Waits 200ms for browser paste rendering, reads `innerHTML`, calls `convert(html)`, updates markdown output, then auto-collapses input.
+    *   **Preview mode control**: Toggles between markdown output view and a 3-tab preview panel.
+    *   **Copy actions**: Supports copying raw HTML and converted markdown from dedicated action buttons.
+
+*   **UI State Model**:
+    *   `previewMode`: Controls whether `#output` or `#preview-panel` is visible.
+    *   `inputCollapsed`: Controls whether the paste target is hidden after conversion.
+    *   `activePreviewView`: Tracks selected tab (`input`, `raw`, `markdown`).
 
 ### 2. Core Conversion (`src/converter.js`)
 

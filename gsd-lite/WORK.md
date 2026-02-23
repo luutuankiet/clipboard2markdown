@@ -32,6 +32,8 @@ DECISION-007: Use Vite for the build system — solves browser caching and provi
 DECISION-008: Adopt a modular `platforms/` architecture — isolates platform-specific logic for maintainability.
 DECISION-009: Jira comment thread annotations — visible italic headers `*[ID ↩ parentID] Author - Date*` + `=== Thread X ===` separators. Blockquotes rejected (break code blocks/tables inside them).
 DECISION-010: `data-attr + \u200B sentinel` pattern — reliable way to inject raw markdown through Turndown without escaping. Set `data-foo="raw text"` + `textContent='\u200B'` on element; custom rule reads attribute, ignores content.
+DECISION-011: UX trust mode uses three preview tabs — rendered input HTML, raw HTML source, and rendered markdown preview — while keeping markdown textarea as canonical copy output.
+DECISION-012: App opens directly in main conversion view with visible paste target; input box auto-collapses after paste and can be manually reopened.
 </decisions>
 
 <blockers>
@@ -39,6 +41,7 @@ None
 </blockers>
 
 <next_action>
+Update `gsd-lite/ARCHITECTURE.md` to document preview tabs, input-collapse behavior, and mobile-first visible paste target.
 </next_action>
 
 ---
@@ -447,3 +450,93 @@ All annotation logic is guarded by `doc.querySelector('[data-testid="issue-activ
 - New task → check WORK.md parked tasks
 
 ---
+### [LOG-020] - [EXEC] - 3-view preview UX + mobile-first input flow shipped - Task: TASK-010
+**Timestamp:** 2026-02-23 17:10
+**Depends On:** LOG-012 (Copy Raw HTML control pattern), LOG-019 (recent Jira UX/code context)
+
+---
+
+#### Executive Summary
+Implemented the full credibility-oriented UX iteration requested in discussion:
+1) 3-tab preview mode for side-by-side trust building,
+2) copy convenience for converted markdown,
+3) mobile-safe landing behavior (main view available immediately), and
+4) input-box collapse control to reduce dual-textbox confusion after paste.
+
+#### What Changed
+- Added preview workflow controls and labels with emojis for fast recognition (`index.html:256`, `index.html:257`, `index.html:258`).
+- Added preview tabs with explicit modes: input render, raw HTML, markdown preview (`index.html:266`, `index.html:268`, `index.html:269`).
+- Added visible, mobile-friendly paste target with placeholder guidance (`index.html:253`, `index.html:51`).
+- Added input collapse state machine and toggle handler in UI controller (`clipboard2markdown.js:284`, `clipboard2markdown.js:399`).
+- Added auto-collapse after successful paste and reopen-on-keyboard-paste behavior (`clipboard2markdown.js:351`, `clipboard2markdown.js:361`, `clipboard2markdown.js:345`).
+- Added preview toggle label state (`clipboard2markdown.js:325`).
+
+#### What We Got Wrong And Pivoted
+Initial direct-main-view change solved mobile lockout but introduced a UX regression: users saw both the paste target and markdown output at once, which looked like duplicate primary inputs. We pivoted from "always-visible input" to "collapsible input with auto-collapse after paste + manual reopen" to preserve repaste speed without persistent clutter.
+
+#### Raw Evidence
+```html
+<button class="action-btn" id="toggle-input-btn">📥 Hide Input Box</button>
+<button class="action-btn" id="copy-html-btn">📋 Copy Raw HTML</button>
+<button class="action-btn" id="copy-md-btn">📝 Copy Converted Markdown</button>
+<button class="action-btn" id="toggle-preview-btn">👀 Show Preview</button>
+```
+Source: `index.html:256`, `index.html:257`, `index.html:258`, `index.html:259`
+
+```javascript
+var setInputCollapsed = function (collapsed, options) {
+  inputCollapsed = collapsed;
+  pastebin.classList.toggle('hidden', collapsed);
+  toggleInputBtn.textContent = collapsed ? '📥 Show Input Box' : '📥 Hide Input Box';
+};
+
+pastebin.addEventListener('paste', function () {
+  // ... convert
+  setInputCollapsed(true, { skipFocus: true });
+});
+```
+Source: `clipboard2markdown.js:284`, `clipboard2markdown.js:351`, `clipboard2markdown.js:361`
+
+#### Decision Record
+**Chosen path:** Tabbed preview + collapsible input.
+- Reason: keeps trust/traceability high while minimizing visual overload on small screens.
+
+**Rejected path A:** Keep input box permanently visible.
+- Why not: creates dual-primary-input ambiguity after paste.
+
+**Rejected path B:** Remove input box entirely after paste.
+- Why not: hurts iterative paste workflow and discoverability for next conversion.
+
+**Rejected path C:** 3 fixed columns instead of tabs.
+- Why not: cramped on laptop/mobile and harder to scan.
+
+#### State Flow
+```mermaid
+graph TD
+    A[Paste into input box] --> B[clipboard2markdown paste handler]
+    B --> C[Convert HTML to markdown]
+    C --> D[Update markdown textarea]
+    D --> E[Render preview tabs<br/>input raw markdown]
+    E --> F[Auto collapse input box]
+    F --> G[User actions<br/>copy toggle preview reopen input]
+```
+
+#### Dependency Chain
+- LOG-020 depends on LOG-012 for action-button UX extension pattern (raw HTML copy flow).
+- LOG-020 depends on LOG-019 as the latest controller context before UX layering.
+
+---
+
+📦 STATELESS HANDOFF
+**Layer 1 — Local Context:**
+→ Last action: LOG-020 (3-view preview UX + mobile-first/collapsible input shipped)
+→ Dependency chain: LOG-020 ← LOG-012 ← LOG-019
+→ Next action: Decide whether to document this UX in ARCHITECTURE only, or also add PROJECT-level success criterion for trust-preview UX.
+
+**Layer 2 — Global Context:**
+→ Architecture: UI orchestration lives in `clipboard2markdown.js`; conversion engine remains `src/converter.js`
+→ Patterns: Additive UX features without changing sanitizer/rule conversion pipeline
+
+**Fork paths:**
+- Continue execution → Update `gsd-lite/ARCHITECTURE.md` with new UI flow and controls
+- Discuss scope → Decide if `gsd-lite/PROJECT.md` should promote preview trust UX from implementation detail to explicit product criterion
