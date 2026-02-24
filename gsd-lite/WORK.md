@@ -9,7 +9,7 @@ discuss
 </current_mode>
 
 <active_task>
-TASK-011 completed — cross-platform annotation contract is now documented in WORK, ARCHITECTURE, and PROJECT.
+TASK-012 executed end-to-end — Mermaid pako decode + base64 payload stripping shipped; markdown preview now renders Mermaid diagrams from source.
 </active_task>
 
 <parked_tasks>
@@ -35,6 +35,8 @@ DECISION-010: `data-attr + \u200B sentinel` pattern — reliable way to inject r
 DECISION-011: UX trust mode uses three preview tabs — rendered input HTML, raw HTML source, and rendered markdown preview — while keeping markdown textarea as canonical copy output.
 DECISION-012: App opens directly in main conversion view with visible paste target; input box auto-collapses after paste and can be manually reopened.
 DECISION-013: Cross-platform annotation contract — preserve conversational structure with visible separators + italic metadata annotations, using `data-attr + \u200B` to bypass Turndown escaping and keep output agent-readable.
+DECISION-014: Strip embedded base64 `data:image/...` payloads at sanitize time and replace with lightweight placeholders to protect agent context size.
+DECISION-015: Markdown preview renders Mermaid via client-side `mermaid.render(...)` with source normalization (`decodeHtmlEntities`) and explicit inline error fallback.
 </decisions>
 
 <blockers>
@@ -42,7 +44,7 @@ None
 </blockers>
 
 <next_action>
-Prepare PR narrative (`PR.md`) and run `npm test` before merge.
+User will finalize fixture coverage for TASK-012/TASK-013 behavior (pako decode, base64 placeholder, Mermaid preview render); agent stands by for UI polish follow-ups.
 </next_action>
 
 ---
@@ -735,3 +737,235 @@ The app's landing page `#info` section was a bit dry.
 **Fork paths:**
 - Continue execution → Add more tests or features.
 - Discuss → Review the landing page visual changes.
+
+### [LOG-024] - [PLAN] - Scoped Mermaid payload normalization to protect agent context - Task: TASK-012
+**Timestamp:** 2026-02-24 10:30
+**Depends On:** LOG-023 (latest workspace baseline), LOG-021 (agent-readable output contract)
+
+---
+
+#### Request Captured
+User requested a convenience function for Mermaid-heavy clipboard content:
+1) Remove/replace embedded base64 images with a lightweight placeholder.
+2) Decode Mermaid `pako` links and replace them with direct Mermaid source code blocks.
+
+Exact request context from session:
+```text
+- remove the base64 embedded image just inject a placeholder image component
+- go to the mermaid link ... replace the whole mermaid pakos with the source mermaid diagram code
+```
+
+#### Evidence
+**Evidence A (pipeline insertion point):**
+`src/converter.js:46`
+```js
+var sanitizeHTML = function (html) {
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  sanitize(doc);
+  return doc.body.innerHTML;
+};
+```
+
+**Evidence B (shared sanitizer hook):**
+`src/platforms/common.js:154`
+```js
+sanitizer: function (doc) {
+  // Generic sanitization logic can go here if needed
+}
+```
+
+**Evidence C (product constraint):**
+`gsd-lite/PROJECT.md:130`
+```md
+- **Browser-only:** No server-side processing — the paste-based approach IS the feature
+```
+
+#### Proposed Plan
+| Step | Action | Verification | Status |
+|---|---|---|---|
+| 1 | Add client-side Mermaid normalizer in common sanitizer | Base64 `data:image/...` in Mermaid contexts no longer emitted as huge markdown payload | Planned |
+| 2 | Add `pako`-based decoder utility (URL-safe base64 + inflate + JSON parse) | `#pako:` payload resolves to Mermaid `code` text when valid | Planned |
+| 3 | Replace Mermaid links with fenced source blocks | Output contains ```mermaid blocks, not long encoded URLs | Planned |
+| 4 | Add regression fixture pair for provided sample shape | `npm test` covers the new behavior | Planned |
+
+#### Decision Record and Rejected Alternatives
+**Chosen approach:** Browser-local decode using `pako` (`pako@^2.1.0`) inside the sanitizer pipeline.
+
+**Implementation prereq (for fresh agents):**
+- Add dependency: `pako@^2.1.0`.
+- Decode contract: extract `#pako:` payload -> URL-safe base64 normalize (`-` -> `+`, `_` -> `/`, restore `=` padding) -> inflate -> JSON parse -> read `.code` for Mermaid source.
+- Fallback policy: if decode fails, keep original link text and do not throw.
+
+**Source citations:**
+| Source | Location | Key finding |
+|---|---|---|
+| pako npm package | `https://registry.npmjs.org/pako/2.1.0` (accessed 2026-02-24) | Browser-compatible zlib/deflate implementation via ESM export. |
+| Product constraint | `gsd-lite/PROJECT.md:130` | Browser-only architecture; no server decode service. |
+
+**Rejected alternatives:**
+- **Remote fetch/decode via Mermaid endpoints** - rejected because source extraction is not guaranteed from render endpoints and adds network dependency.
+- **Server-side decode service** - rejected because it violates browser-only product intent (`gsd-lite/PROJECT.md:130`).
+- **Leave encoded link untouched** - rejected because encoded blobs and base64 images unnecessarily bloat agent context.
+
+#### Flow Sketch
+```mermaid
+graph TD
+    A[Pasted HTML] --> B[Sanitize DOM]
+    B --> C[Replace base64 Mermaid images with placeholder]
+    B --> D[Decode pako link to Mermaid source]
+    C --> E[Turndown conversion]
+    D --> E
+    E --> F[Compact Markdown output]
+```
+
+#### Dependency Chain
+- LOG-024 defines execution plan for TASK-012 based on current state in LOG-023.
+- LOG-024 aligns with LOG-021 readability/agent-parseability standard by reducing noisy payloads and preserving source semantics.
+
+---
+
+📦 STATELESS HANDOFF
+**Layer 1 — Local Context:**
+→ Last action: LOG-024 (captured request and execution plan for Mermaid payload normalization)
+→ Dependency chain: LOG-024 ← LOG-023 ← LOG-021
+→ Next action: In fresh forked session, implement sanitizer + pako decode utility + fixtures, then run `npm test`.
+
+**Layer 2 — Global Context:**
+→ Architecture: Conversion pipeline is sanitize-first (`src/converter.js`) with modular platform sanitizers (`src/platforms/index.js`).
+→ Patterns: Keep outputs agent-readable and avoid escaped/noisy payloads; preserve browser-only behavior.
+
+**Fork paths:**
+- Continue execution → Implement TASK-012 plan from LOG-024.
+- Discuss approach → Reconfirm placeholder token shape and fallback behavior for invalid pako payloads.
+
+### [LOG-025] - [EXEC] [BREAKTHROUGH] - Mermaid normalization shipped and preview rendering stabilized - Task: TASK-012, TASK-013
+**Timestamp:** 2026-02-24 22:20
+**Depends On:** LOG-024 (plan for Mermaid payload normalization), LOG-020 (preview-pane UX foundation)
+
+---
+
+#### Narrative Arc
+We executed LOG-024 and shipped all requested behavior in one pass through sanitize + preview layers:
+1) Mermaid `#pako:` links are decoded to source and emitted as fenced Mermaid blocks.
+2) Embedded base64 image payloads are replaced with lightweight placeholders.
+3) Markdown preview now renders Mermaid SVG instead of raw fenced source.
+
+The blocker was not conversion output; it was preview rendering reliability across real pasted HTML and entity-encoded Mermaid source (`--&gt;`).
+
+#### What We Got Wrong and Pivot
+- **Initial miss:** base64 replacement was scoped to Mermaid-only context checks. Real pasted Google Docs content used generic `data:image/...` without Mermaid markers, so payloads leaked into markdown.
+- **Initial preview approach:** using `mermaid.run({ nodes })` did not reliably transform dynamic preview nodes in this UI flow.
+- **Pivot:** align with known-good rendering shape from reader-vite (`await mermaid.render(...)`), plus normalize HTML entities before render and keep inline error fallback visible.
+
+#### Evidence
+**Evidence A (sanitize pipeline now decodes pako and strips base64 payloads):**
+Citations: `src/platforms/common.js:194`, `src/platforms/common.js:222`, `src/platforms/common.js:239`, `src/platforms/common.js:249`
+```js
+var decodePakoPayload = function (payload) { ... }
+doc.querySelectorAll('a[href*="#pako:"]').forEach(function (link) { ... });
+doc.querySelectorAll('img[src^="data:image/"]').forEach(function (img) { ... });
+var label = ... 'embedded image omitted (base64 payload removed)';
+```
+
+**Evidence B (preview parser/render now handles Mermaid fences + unlabeled Mermaid-like fences):**
+Citations: `clipboard2markdown.js:125`, `clipboard2markdown.js:165`, `clipboard2markdown.js:347`, `clipboard2markdown.js:389`, `clipboard2markdown.js:418`
+```js
+var isMermaidFence = fenceLanguage === 'mermaid' || (!fenceLanguage && looksLikeMermaidCode(codeText));
+var source = decodeHtmlEntities(encodedSource).replace(/\r\n/g, '\n').trim();
+return Promise.resolve(mermaidApi.render(renderId, source));
+```
+
+**Evidence C (runtime symptom reported by user):**
+Session evidence showed `.mermaid` blocks containing fallback HTML instead of SVG:
+```html
+<div class="mermaid" data-mermaid-source="flowchart TD ...">
+  <pre><code>flowchart TD ... --&gt; ...</code></pre>
+</div>
+```
+This confirmed render fallback path was executing and source required entity normalization.
+
+**Evidence D (reference implementation used for pivot):**
+Citation: `/Users/luutuankiet/dev/gsd_lite/plugins/reader-vite/src/main.ts:366`, `/Users/luutuankiet/dev/gsd_lite/plugins/reader-vite/src/main.ts:398`
+```ts
+mermaid.initialize({ startOnLoad: false, suppressErrorRendering: true, ... })
+const { svg } = await mermaid.render(`mermaid-${i}`, code);
+```
+
+#### Hypothesis Tracking
+| Hypothesis | Likelihood | Test | Status |
+|---|---|---|---|
+| A) Base64 leak is caused by Mermaid-context-only filter | High | Reproduce with non-Mermaid-tagged `data:image/...` payload | ✅ CONFIRMED |
+| B) Preview does not detect Mermaid because fence label can be missing | Medium | Add Mermaid syntax detector for unlabeled fenced blocks | ✅ CONFIRMED |
+| C) Mermaid runtime API mismatch / dynamic-node timing causes no SVG | High | Replace node-run path with direct `mermaid.render` promise flow | ✅ CONFIRMED |
+| D) HTML entities (`--&gt;`) break Mermaid parsing | High | Decode entities before render and retest | ✅ CONFIRMED |
+
+#### Implementation Checklist
+| Step | Action | Verification | Status |
+|---|---|---|---|
+| 1 | Add `pako` and Mermaid sanitize decode path | Mermaid links become source fences | ✅ |
+| 2 | Replace embedded base64 images with placeholders | No `data:image/...` blobs in output markdown | ✅ |
+| 3 | Add Mermaid preview rendering in markdown pane | Fenced Mermaid displays as SVG | ✅ |
+| 4 | Harden preview for unlabeled fences + entity decoding | User repro flow succeeds after patch | ✅ |
+| 5 | Add Mermaid dependency | Vite import error resolved | ✅ |
+
+#### Decision Record and Rejected Alternatives
+**Chosen path:** Keep conversion output markdown-first and add deterministic preview-only rendering using `mermaid.render(...)` after markdown HTML insertion.
+
+**Rejected alternatives:**
+- **Keep base64 replacement Mermaid-only** - rejected because real clipboard payloads may not carry Mermaid-specific markers.
+- **Keep `mermaid.run({ nodes })` as sole render strategy** - rejected due inconsistent transformation for this dynamic preview flow.
+- **Server-side rendering for diagrams** - rejected to preserve browser-only product constraint (`gsd-lite/PROJECT.md:130`).
+
+#### Source Citations Table
+| Source | Location | Key Finding |
+|---|---|---|
+| Sanitizer implementation | `src/platforms/common.js:222` | `#pako:` links are decoded and replaced with Mermaid source blocks. |
+| Sanitizer implementation | `src/platforms/common.js:239` | All `data:image/...` payloads are replaced with placeholders. |
+| Preview parser | `clipboard2markdown.js:165` | Unlabeled Mermaid-like fenced blocks are detected. |
+| Preview renderer | `clipboard2markdown.js:389` | Mermaid source is HTML-entity decoded before render. |
+| Preview renderer | `clipboard2markdown.js:347` | Render path uses `mermaid.render(...)` promise payload handling. |
+| Dependency manifest | `package.json:36` | Mermaid dependency installed (`^11.0.0`). |
+| Reference implementation | `/Users/luutuankiet/dev/gsd_lite/plugins/reader-vite/src/main.ts:398` | Proven `await mermaid.render(...)` pattern used for reliable SVG output. |
+
+#### Flow Sketch
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI as clipboard2markdown.js
+    participant San as src/platforms/common.js
+    participant TD as Turndown
+    participant Prev as Markdown Preview
+    participant M as Mermaid
+
+    User->>UI: Paste HTML
+    UI->>San: sanitize(doc)
+    San->>San: decode #pako payload
+    San->>San: replace data:image with placeholder
+    San-->>UI: sanitized HTML
+    UI->>TD: convert to markdown
+    TD-->>UI: markdown
+    UI->>Prev: render markdown HTML
+    Prev->>M: render(source)
+    M-->>Prev: SVG diagram
+```
+
+#### Dependency Chain
+- LOG-025 executes the plan defined in LOG-024.
+- LOG-025 extends LOG-020 preview UX by adding Mermaid visualization fidelity.
+- LOG-025 preserves LOG-021 readability contract by reducing payload noise and keeping source semantics intact.
+
+---
+
+📦 STATELESS HANDOFF
+**Layer 1 — Local Context:**
+→ Last action: LOG-025 completed TASK-012/TASK-013 implementation and stabilized Mermaid preview rendering.
+→ Dependency chain: LOG-025 ← LOG-024 ← LOG-020 ← LOG-021
+→ Next action: User-owned fixture additions for regression coverage (pako decode + base64 placeholder + preview render).
+
+**Layer 2 — Global Context:**
+→ Architecture: sanitize-first conversion pipeline with modular platform sanitizers; UI preview layer can enrich visualization without changing canonical markdown output.
+→ Patterns: preserve agent-readable markdown, strip noisy payloads early, and render rich diagrams only in preview layer.
+
+**Fork paths:**
+- Continue execution → add fixtures and validate `npm test` snapshots for Mermaid/base64 behavior.
+- Discuss follow-up UX → optionally add click-to-expand Mermaid overlay with pan/zoom controls.

@@ -1,3 +1,4 @@
+import mermaid from 'mermaid';
 import { convert } from './src/converter.js';
 
 // ===========================================
@@ -34,6 +35,12 @@ var escapeHtml = function (text) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+};
+
+var decodeHtmlEntities = function (text) {
+  var textarea = document.createElement('textarea');
+  textarea.innerHTML = String(text || '');
+  return textarea.value;
 };
 
 var renderInlineMarkdown = function (text) {
@@ -115,6 +122,14 @@ var isSpecialLine = function (line, nextLine) {
   );
 };
 
+var looksLikeMermaidCode = function (source) {
+  var firstLine = (source || '').split('\n').find(function (line) {
+    return line.trim() !== '';
+  }) || '';
+
+  return /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|quadrantChart|requirementDiagram|xychart-beta|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\b/i.test(firstLine.trim());
+};
+
 var renderMarkdownPreview = function (markdown) {
   if (!markdown) {
     return '<p><em>No markdown output yet.</em></p>';
@@ -134,6 +149,8 @@ var renderMarkdownPreview = function (markdown) {
     }
 
     if (/^```/.test(trimmed)) {
+      var fenceMatch = trimmed.match(/^```\s*([a-zA-Z0-9_-]+)?/);
+      var fenceLanguage = fenceMatch && fenceMatch[1] ? fenceMatch[1].toLowerCase() : '';
       var codeLines = [];
       i += 1;
       while (i < lines.length && !/^```/.test(lines[i].trim())) {
@@ -143,7 +160,15 @@ var renderMarkdownPreview = function (markdown) {
       if (i < lines.length) {
         i += 1;
       }
-      htmlParts.push('<pre><code>' + escapeHtml(codeLines.join('\n')) + '</code></pre>');
+
+      var codeText = codeLines.join('\n');
+      var isMermaidFence = fenceLanguage === 'mermaid' || (!fenceLanguage && looksLikeMermaidCode(codeText));
+
+      if (isMermaidFence) {
+        htmlParts.push('<div class="mermaid">' + escapeHtml(codeText) + '</div>');
+      } else {
+        htmlParts.push('<pre><code>' + escapeHtml(codeText) + '</code></pre>');
+      }
       continue;
     }
 
@@ -309,12 +334,97 @@ document.addEventListener('DOMContentLoaded', function () {
         previewPanes[paneKey].classList.remove('active');
       }
     });
+
+    if (viewName === 'markdown') {
+      renderMermaidPreview();
+    }
+  };
+
+  var mermaidApi = mermaid && mermaid.default ? mermaid.default : mermaid;
+  var mermaidInitialized = false;
+  var mermaidRenderToken = 0;
+
+  var renderMermaidDiagram = function (renderId, source) {
+    return Promise.resolve(mermaidApi.render(renderId, source)).then(function (result) {
+      if (typeof result === 'string') {
+        return { svg: result };
+      }
+
+      if (!result || typeof result.svg !== 'string') {
+        throw new Error('Mermaid render returned invalid payload');
+      }
+
+      return result;
+    });
+  };
+
+  var renderMermaidPreview = function () {
+    var nodes = Array.from(markdownPreview.querySelectorAll('.mermaid'));
+    if (!nodes.length || !mermaidApi || typeof mermaidApi.render !== 'function') {
+      return;
+    }
+
+    if (!mermaidInitialized) {
+      mermaidApi.initialize({
+        startOnLoad: false,
+        securityLevel: 'loose',
+        suppressErrorRendering: true
+      });
+      mermaidInitialized = true;
+    }
+
+    mermaidRenderToken += 1;
+    var currentToken = mermaidRenderToken;
+
+    Promise.all(nodes.map(function (node, index) {
+      if (node.getAttribute('data-mermaid-rendered') === 'true') {
+        return Promise.resolve();
+      }
+
+      if (!node.hasAttribute('data-mermaid-source')) {
+        node.setAttribute('data-mermaid-source', (node.textContent || '').trim());
+      }
+
+      var encodedSource = node.getAttribute('data-mermaid-source') || '';
+      var source = decodeHtmlEntities(encodedSource)
+        .replace(/\u00a0/g, ' ')
+        .replace(/\r\n/g, '\n')
+        .trim();
+
+      if (!source) {
+        return Promise.resolve();
+      }
+
+      node.setAttribute('data-mermaid-source', source);
+
+      var renderId = 'markdown-preview-mermaid-' + currentToken + '-' + index;
+      return renderMermaidDiagram(renderId, source).then(function (result) {
+        if (currentToken !== mermaidRenderToken) {
+          return;
+        }
+
+        if (!result || !result.svg) {
+          return;
+        }
+
+        node.innerHTML = '<div class="mermaid-container">' + result.svg + '</div>';
+        node.setAttribute('data-mermaid-rendered', 'true');
+        if (typeof result.bindFunctions === 'function') {
+          result.bindFunctions(node);
+        }
+      }).catch(function (err) {
+        console.error('Mermaid preview render failed:', err);
+        node.innerHTML = '<pre><code>' + escapeHtml(source) + '</code></pre>' +
+          '<p><em>Mermaid render error: ' + escapeHtml(err && err.message ? err.message : String(err)) + '</em></p>';
+      });
+    }));
   };
 
   var renderPreviewViews = function (html, markdown) {
     previewRawCode.textContent = html || '';
     previewFrame.srcdoc = buildInputPreviewDocument(html);
     markdownPreview.innerHTML = renderMarkdownPreview(markdown);
+    renderMermaidPreview();
   };
 
   var setPreviewMode = function (enabled, options) {

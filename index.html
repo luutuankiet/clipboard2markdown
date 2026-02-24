@@ -169,6 +169,17 @@
                 background: transparent;
                 padding: 0;
             }
+            #markdown-preview .mermaid {
+                border: 1px solid #d8dde3;
+                border-radius: 6px;
+                margin: 10px 0;
+                overflow-x: auto;
+                padding: 10px;
+            }
+            #markdown-preview .mermaid svg {
+                height: auto;
+                max-width: 100%;
+            }
             #wrapper.preview-mode #output {
                 display: none;
             }
@@ -230,6 +241,10 @@
                 }
                 #preview-raw-code,
                 #markdown-preview pre {
+                    background: #0f1115;
+                    border-color: #3a3f47;
+                }
+                #markdown-preview .mermaid {
                     background: #0f1115;
                     border-color: #3a3f47;
                 }

@@ -1,4 +1,5 @@
 // src/platforms/common.js
+import pako from 'pako';
 
 export default {
   rules: [
@@ -59,6 +60,30 @@ export default {
       }
     },
 
+    // Mermaid source blocks decoded from #pako payloads
+    {
+      name: 'mermaidSourceBlock',
+      filter: function (node) {
+        return node.nodeName === 'PRE' && node.hasAttribute('data-mermaid-source');
+      },
+      replacement: function (content, node) {
+        var source = node.textContent || '';
+        return '\n\n```mermaid\n' + source + '\n```\n\n';
+      }
+    },
+
+    // Mermaid base64 preview placeholders
+    {
+      name: 'mermaidImagePlaceholder',
+      filter: function (node) {
+        return node.nodeName === 'SPAN' && node.hasAttribute('data-mermaid-image-placeholder');
+      },
+      replacement: function (content, node) {
+        var alt = node.getAttribute('data-mermaid-image-placeholder') || 'mermaid diagram preview omitted';
+        return '![' + alt + '](mermaid-image-placeholder)';
+      }
+    },
+
      // Fenced code blocks (PRE, with or without CODE child)
     {
       name: 'fencedCodeBlock',
@@ -86,7 +111,7 @@ export default {
             node.nodeName === 'TT';
 
         // Custom span.inline-code or span.code (Jira)
-        var isSpanCode = node.nodeName === 'SPAN' && 
+        var isSpanCode = node.nodeName === 'SPAN' &&
             (node.classList.contains('inline-code') || node.classList.contains('code'));
 
         return (isStandardCode || isSpanCode) && !isCodeBlock;
@@ -106,7 +131,7 @@ export default {
       replacement: function (content, node) {
         var url = node.getAttribute('href');
         var titlePart = node.title ? ' "' + node.title + '"' : '';
-        
+
         if (content === url) {
           return '<' + url + '>';
         } else if (url === ('mailto:' + content)) {
@@ -152,6 +177,122 @@ export default {
     }
   ],
   sanitizer: function (doc) {
-    // Generic sanitization logic can go here if needed
+    var body = doc.body || doc.documentElement;
+    if (!body) return;
+    var seenMermaidPayloads = Object.create(null);
+
+    var cleanMermaidCode = function (source) {
+      if (!source) return null;
+      return source.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' ').trim();
+    };
+
+    var normalizeBase64Url = function (payload) {
+      var normalized = (payload || '').replace(/-/g, '+').replace(/_/g, '/');
+      while (normalized.length % 4 !== 0) normalized += '=';
+      return normalized;
+    };
+
+    var decodePakoPayload = function (payload) {
+      try {
+        var binary = atob(normalizeBase64Url(payload));
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+
+        var inflated = pako.inflate(bytes, { to: 'string' });
+        var parsed = JSON.parse(inflated);
+
+        if (!parsed || typeof parsed.code !== 'string') {
+          return null;
+        }
+
+        return cleanMermaidCode(parsed.code);
+      } catch (error) {
+        return null;
+      }
+    };
+
+    var extractPakoPayload = function (href) {
+      if (!href) return null;
+      var match = href.match(/#pako:([^?&#]+)/);
+      return match ? match[1] : null;
+    };
+
+    var pruneEmptyContainers = function (node) {
+      var current = node;
+      while (current && current !== body) {
+        if (current.nodeType !== 1) return;
+
+        var text = (current.textContent || '').replace(/\u200B/g, '').trim();
+        if (text) return;
+
+        if (current.querySelector && current.querySelector('img,pre,code,a,table,ul,ol,li,blockquote,hr')) {
+          return;
+        }
+
+        var parent = current.parentNode;
+        if (!parent) return;
+
+        parent.removeChild(current);
+        current = parent;
+      }
+    };
+
+    // Decode Mermaid pako links into source code blocks.
+    doc.querySelectorAll('a[href*="#pako:"]').forEach(function (link) {
+      var payload = extractPakoPayload(link.getAttribute('href'));
+      if (!payload) return;
+
+      if (seenMermaidPayloads[payload]) {
+        var duplicateParent = link.parentNode;
+        var duplicateText = (link.textContent || '').trim();
+
+        if (duplicateParent) {
+          if (duplicateText) {
+            duplicateParent.replaceChild(doc.createTextNode(duplicateText), link);
+          } else {
+            duplicateParent.removeChild(link);
+            pruneEmptyContainers(duplicateParent);
+          }
+        }
+        return;
+      }
+
+      var source = decodePakoPayload(payload);
+      if (!source) return;
+
+      seenMermaidPayloads[payload] = true;
+
+      var pre = doc.createElement('pre');
+      pre.setAttribute('data-mermaid-source', 'true');
+      pre.textContent = source;
+
+      if (link.parentNode) {
+        link.parentNode.replaceChild(pre, link);
+      }
+    });
+
+    // Replace embedded base64 image payloads with stable placeholders.
+    doc.querySelectorAll('img[src^="data:image/"]').forEach(function (img) {
+      var src = img.getAttribute('src') || '';
+      if (!src) return;
+
+      var contextText = (img.getAttribute('alt') || '') + ' ' +
+        (img.getAttribute('title') || '') + ' ' +
+        (img.getAttribute('class') || '');
+
+      var label = /mermaid/i.test(contextText)
+        ? 'mermaid diagram preview omitted'
+        : 'embedded image omitted (base64 payload removed)';
+
+      var placeholder = doc.createElement('span');
+      placeholder.setAttribute('data-mermaid-image-placeholder', label);
+      placeholder.textContent = '\u200B';
+
+      if (img.parentNode) {
+        img.parentNode.replaceChild(placeholder, img);
+      }
+    });
   }
 };
