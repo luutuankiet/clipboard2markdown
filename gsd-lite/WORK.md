@@ -707,3 +707,31 @@ graph TD
 **Fork paths:**
 - Continue execution → Prepare PR text and validation checklist.
 - Extend scope → Apply same contract to next platform module and add fixtures before implementation diverges.
+### [LOG-023] - [EXEC] - Updated Landing Page Copy & Added GitHub Fork Ribbon - Task: N/A
+**Timestamp:** 2026-02-24 10:00
+**Depends On:** N/A
+
+---
+
+#### Updated Landing Page
+
+The app's landing page `#info` section was a bit dry.
+- Rewrote the copy to emphasize the core value proposition: "Convert rich text from **Jira, Confluence, Slack**, and more into clean, AI-ready Markdown. Bypass authentication walls by copying from your tools and pasting directly here."
+- Added a "Fork me on GitHub" link with a GitHub icon, linking back to the repo `https://github.com/luutuankiet/clipboard2markdown`.
+- Used flexbox to position the title and the "Fork me" link cleanly.
+
+---
+
+📦 STATELESS HANDOFF
+**Layer 1 — Local Context:**
+→ Last action: LOG-023 (Updated landing page description and added Fork me link)
+→ Dependency chain: LOG-023
+→ Next action: User to review the UI changes and decide next steps.
+
+**Layer 2 — Global Context:**
+→ Architecture: Client-side Vite app with Turndown.js logic.
+→ Patterns: UI modifications kept entirely inside index.html for simplicity.
+
+**Fork paths:**
+- Continue execution → Add more tests or features.
+- Discuss → Review the landing page visual changes.
