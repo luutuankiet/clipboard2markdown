@@ -5,12 +5,14 @@ import common from './common.js';
 import confluence from './confluence.js';
 import googleSheets from './google-sheets.js';
 import googleChat from './google-chat.js';
+import googleDocs from './google-docs.js';
 
 // Add other platforms here as they are created
 // import notion from './notion.js';
 
 const allPlatforms = [
   googleSheets, // Must run early to flatten colspan before GFM table processing
+  googleDocs,   // Must run before common to replace styled spans with semantic elements
   confluence,   // Must run before jira to clean up wrapper divs first
   jira,
   slack,

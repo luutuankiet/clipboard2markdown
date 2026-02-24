@@ -57,7 +57,8 @@ var sanitizeHTML = function (html) {
 // ===========================================
 
 var escape = function (str) {
-  return str.replace(/[\u2018\u2019\u00b4]/g, "'")
+  return str.replace(/^(#{1,6} \d+)\\\./gm, '$1.')  // unescape 1\. in headings — can't be a list there
+            .replace(/[\u2018\u2019\u00b4]/g, "'")
             .replace(/[\u201c\u201d\u2033]/g, '"')
             .replace(/[\u2212\u2022\u00b7\u25aa]/g, '-')
             .replace(/[\u2013\u2015]/g, '--')
