@@ -122,6 +122,55 @@ var isSpecialLine = function (line, nextLine) {
   );
 };
 
+var getListLineMatch = function (line) {
+  return line.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+};
+
+var renderListBlock = function (lines, startIndex) {
+  var html = '';
+  var stack = [];
+  var i = startIndex;
+  var hasAny = false;
+
+  while (i < lines.length) {
+    var raw = lines[i];
+    if (!raw.trim()) {
+      i += 1;
+      continue;
+    }
+
+    var match = getListLineMatch(raw);
+    if (!match) break;
+
+    hasAny = true;
+    var indent = match[1].replace(/\t/g, '    ').length;
+    var type = /^\d+\.$/.test(match[2]) ? 'ol' : 'ul';
+    var text = match[3];
+
+    while (stack.length && (indent < stack[stack.length - 1].indent || (indent === stack[stack.length - 1].indent && type !== stack[stack.length - 1].type))) {
+      html += '</li></' + stack[stack.length - 1].type + '>';
+      stack.pop();
+    }
+
+    if (stack.length && indent === stack[stack.length - 1].indent && type === stack[stack.length - 1].type) {
+      html += '</li>';
+    } else {
+      html += '<' + type + '>';
+      stack.push({ type: type, indent: indent });
+    }
+
+    html += '<li>' + renderInlineMarkdown(text);
+    i += 1;
+  }
+
+  while (stack.length) {
+    html += '</li></' + stack[stack.length - 1].type + '>';
+    stack.pop();
+  }
+
+  return hasAny ? { html: html, nextIndex: i } : null;
+};
+
 var looksLikeMermaidCode = function (source) {
   var firstLine = (source || '').split('\n').find(function (line) {
     return line.trim() !== '';
@@ -201,27 +250,10 @@ var renderMarkdownPreview = function (markdown) {
       continue;
     }
 
-    if (/^[-*+]\s+/.test(trimmed)) {
-      var listItems = [];
-      while (i < lines.length && /^[-*+]\s+/.test(lines[i].trim())) {
-        listItems.push(lines[i].trim().replace(/^[-*+]\s+/, ''));
-        i += 1;
-      }
-      htmlParts.push('<ul>' + listItems.map(function (item) {
-        return '<li>' + renderInlineMarkdown(item) + '</li>';
-      }).join('') + '</ul>');
-      continue;
-    }
-
-    if (/^\d+\.\s+/.test(trimmed)) {
-      var orderedItems = [];
-      while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
-        orderedItems.push(lines[i].trim().replace(/^\d+\.\s+/, ''));
-        i += 1;
-      }
-      htmlParts.push('<ol>' + orderedItems.map(function (item) {
-        return '<li>' + renderInlineMarkdown(item) + '</li>';
-      }).join('') + '</ol>');
+    var listBlock = renderListBlock(lines, i);
+    if (listBlock) {
+      htmlParts.push(listBlock.html);
+      i = listBlock.nextIndex;
       continue;
     }
 

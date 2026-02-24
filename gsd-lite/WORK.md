@@ -9,7 +9,7 @@ discuss
 </current_mode>
 
 <active_task>
-TASK-012 executed end-to-end — Mermaid pako decode + base64 payload stripping shipped; markdown preview now renders Mermaid diagrams from source.
+TASK-014 executed end-to-end — Google Docs list hierarchy issue fixed across sanitizer and markdown preview renderer (nested bullets now retain depth).
 </active_task>
 
 <parked_tasks>
@@ -44,7 +44,7 @@ None
 </blockers>
 
 <next_action>
-User will finalize fixture coverage for TASK-012/TASK-013 behavior (pako decode, base64 placeholder, Mermaid preview render); agent stands by for UI polish follow-ups.
+User will add fixtures for the Google Docs nested-list regression and then decide whether to run a full fixture sweep for list-heavy docs.
 </next_action>
 
 ---
@@ -969,3 +969,113 @@ sequenceDiagram
 **Fork paths:**
 - Continue execution → add fixtures and validate `npm test` snapshots for Mermaid/base64 behavior.
 - Discuss follow-up UX → optionally add click-to-expand Mermaid overlay with pan/zoom controls.
+
+### [LOG-026] - [EXEC] [BUG] - Google Docs nested-list hierarchy fixed across sanitize + preview layers - Task: TASK-014
+**Timestamp:** 2026-02-24 23:05
+**Depends On:** LOG-025 (recent preview/rendering hardening), LOG-022 (documentation hygiene and artifact discipline)
+
+---
+
+#### Narrative Arc
+User reported a Google Docs regression where nested bullets in the "Impact radius" section were still rendered as root-level bullets in preview even after indentation/newline cleanup. We traced the issue across two layers:
+1) Google Docs sanitizer DOM shape.
+2) In-app markdown preview parser.
+
+Result: nested bullets now keep hierarchy in markdown preview, and loose-list spacing no longer causes renderer misinterpretation.
+
+#### What We Got Wrong and Pivot
+- **Initial assumption:** this was only a sanitizer issue.
+- **What changed:** sanitizer fixes removed blank spacing, but preview still flattened nesting because list parsing used `trim()` and a flat bullet collector.
+- **Pivot:** keep sanitizer fixes and add indentation-aware nested list parsing in preview renderer.
+
+#### Evidence
+**Evidence A (single-line monospace no longer promoted to fenced blocks):**
+Citations: `src/platforms/google-docs.js:78`, `src/platforms/google-docs.js:81`
+```js
+var codeLineCount = groupNodes.reduce(function (count, item) {
+  return count + (item.blank ? 0 : 1);
+}, 0);
+if (codeLineCount < 2) return;
+```
+
+**Evidence B (Google Docs sibling nested lists are re-parented to prior `<li>`):**
+Citations: `src/platforms/google-docs.js:224`, `src/platforms/google-docs.js:273`
+```js
+// Repair Google Docs nested list structure
+if (hostLi) hostLi.appendChild(list);
+```
+
+**Evidence C (`<li><p>...</p></li>` flattening removes loose-list blank line emission):**
+Citation: `src/platforms/google-docs.js:283`
+```js
+doc.querySelectorAll('li > p').forEach(function (p) {
+  while (p.firstChild) p.parentNode.insertBefore(p.firstChild, p);
+  p.remove();
+});
+```
+
+**Evidence D (preview renderer now parses lists by indentation + stack):**
+Citations: `clipboard2markdown.js:125`, `clipboard2markdown.js:129`, `clipboard2markdown.js:253`
+```js
+var getListLineMatch = function (line) { ... };
+var renderListBlock = function (lines, startIndex) { ... };
+var listBlock = renderListBlock(lines, i);
+```
+
+#### Implementation Checklist
+| Step | Action | Verification | Status |
+|---|---|---|---|
+| 1 | Stop single-line monospace from becoming fenced code | User confirmed previous Google Docs block/table issues resolved | ✅ |
+| 2 | Repair Docs nested list DOM shape (`aria-level` sibling lists) | Nested list items now attach under previous parent bullet | ✅ |
+| 3 | Remove `li > p` wrappers to avoid loose list spacing | Blank lines between bullets removed | ✅ |
+| 4 | Make preview renderer indentation-aware for nested lists | User confirmed nested bullets now display correctly | ✅ |
+
+#### Decision Record and Rejected Alternatives
+**Chosen path:** Fix both conversion-sanitizer shape and preview parser semantics.
+
+**Rejected alternatives:**
+- **Only sanitizer fix** - rejected because preview parser still flattened nested list depth.
+- **Move `li > p` unwrap to common sanitizer** - rejected to avoid changing non-Google-Docs list semantics globally.
+- **Replace custom preview parser with full markdown runtime** - rejected for now to keep preview lightweight and deterministic in current architecture.
+
+#### Source Citations Table
+| Source | Location | Key Finding |
+|---|---|---|
+| Google Docs sanitizer | `src/platforms/google-docs.js:78` | Single-line monospace blocks are no longer auto-promoted to fenced code. |
+| Google Docs sanitizer | `src/platforms/google-docs.js:224` | Nested sibling lists are repaired into proper parent-child list structure. |
+| Google Docs sanitizer | `src/platforms/google-docs.js:283` | `li > p` wrappers are flattened to remove loose-list spacing artifacts. |
+| Preview parser | `clipboard2markdown.js:129` | Nested lists now use stack-based indentation-aware parsing. |
+| Preview parser | `clipboard2markdown.js:253` | `renderMarkdownPreview` delegates list handling to nested-list block parser. |
+
+#### Flow Sketch
+```mermaid
+graph TD
+    A[Google Docs pasted HTML] --> B[google-docs sanitizer]
+    B --> C[repair nested list DOM<br/>sibling list to child list]
+    B --> D[unwrap li p wrappers]
+    C --> E[Turndown markdown output]
+    D --> E
+    E --> F[preview renderMarkdownPreview]
+    F --> G[indentation-aware renderListBlock]
+    G --> H[nested bullet preview matches markdown hierarchy]
+```
+
+#### Dependency Chain
+- LOG-026 builds on LOG-025 preview hardening and extends renderer correctness for nested list semantics.
+- LOG-026 preserves prior decision to keep canonical markdown output and treat preview as enrichment layer, not source-of-truth transformation.
+
+---
+
+📦 STATELESS HANDOFF
+**Layer 1 — Local Context:**
+→ Last action: LOG-026 completed TASK-014 by fixing Google Docs nested list hierarchy in both sanitizer and preview renderer.
+→ Dependency chain: LOG-026 ← LOG-025 ← LOG-022
+→ Next action: Add focused fixture(s) for nested list + `li > p` cases to prevent regressions.
+
+**Layer 2 — Global Context:**
+→ Architecture: sanitize-first conversion in `src/platforms/*` + custom markdown preview parser in `clipboard2markdown.js`.
+→ Patterns: fix clipboard-source DOM quirks at sanitizer layer, then preserve markdown semantics in lightweight preview rendering.
+
+**Fork paths:**
+- Continue execution → add `tests/fixtures/google-docs/*` nested-list fixture pair and run `npm test`.
+- Discuss product behavior → decide whether preview parser should eventually be replaced by a full markdown engine.

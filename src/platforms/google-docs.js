@@ -72,6 +72,14 @@ export default {
 
       if (groupNodes.length === 0) return;
 
+      // A single monospace paragraph is usually inline code-like content
+      // (file paths, identifiers, table/list cell values), not a fenced block.
+      // Require 2+ monospace lines before promoting to <pre><code>.
+      var codeLineCount = groupNodes.reduce(function (count, item) {
+        return count + (item.blank ? 0 : 1);
+      }, 0);
+      if (codeLineCount < 2) return;
+
       var lines = groupNodes.map(function (item) {
         return item.blank ? '' : item.node.textContent.replace(/\u00a0/g, ' ');
       });
@@ -213,7 +221,73 @@ export default {
     });
 
     // -------------------------------------------------------
-    // 10. Strip dir/style/aria attrs from paragraphs and list elements
+    // 10. Repair Google Docs nested list structure
+    //
+    // Docs often emits nested bullets as sibling lists instead of
+    // nesting them under the previous <li>:
+    //   <ul><li>Parent</li></ul><ul><li aria-level="2">Child</li></ul>
+    // This flattens indentation in markdown output.
+    // -------------------------------------------------------
+    doc.querySelectorAll('ul, ol').forEach(function (list) {
+      if (!list.parentNode || list.parentNode.nodeName === 'LI') return;
+
+      var firstLi = null;
+      for (var i = 0; i < list.children.length; i++) {
+        if (list.children[i].nodeName === 'LI') {
+          firstLi = list.children[i];
+          break;
+        }
+      }
+      if (!firstLi) return;
+
+      var level = parseInt(firstLi.getAttribute('aria-level') || '1', 10);
+      if (!(level > 1)) return;
+
+      var prev = list.previousSibling;
+      while (prev) {
+        if (prev.nodeType === 3 && !prev.textContent.trim()) {
+          prev = prev.previousSibling;
+          continue;
+        }
+        if (prev.nodeType === 1 && prev.nodeName === 'BR') {
+          prev = prev.previousSibling;
+          continue;
+        }
+        break;
+      }
+
+      if (!prev || prev.nodeType !== 1) return;
+
+      var hostLi = null;
+      if (prev.nodeName === 'LI') {
+        hostLi = prev;
+      } else if (prev.nodeName === 'UL' || prev.nodeName === 'OL') {
+        for (var j = prev.children.length - 1; j >= 0; j--) {
+          if (prev.children[j].nodeName === 'LI') {
+            hostLi = prev.children[j];
+            break;
+          }
+        }
+      }
+
+      if (hostLi) hostLi.appendChild(list);
+    });
+
+    // -------------------------------------------------------
+    // 11. Unwrap list-item paragraphs to avoid loose list spacing
+    //
+    // Google Docs wraps list text in <li><p>...</p></li>, which makes
+    // Turndown emit extra blank lines between bullets. Flatten to
+    // <li>text ...</li> so nested lists keep proper hierarchy.
+    // -------------------------------------------------------
+    doc.querySelectorAll('li > p').forEach(function (p) {
+      if (!p.parentNode) return;
+      while (p.firstChild) p.parentNode.insertBefore(p.firstChild, p);
+      p.remove();
+    });
+
+    // -------------------------------------------------------
+    // 12. Strip dir/style/aria attrs from paragraphs and list elements
     // -------------------------------------------------------
     doc.querySelectorAll('p, li, ul, ol').forEach(function (el) {
       el.removeAttribute('dir');
@@ -223,7 +297,7 @@ export default {
     });
 
     // -------------------------------------------------------
-    // 11. Remove injected <style> tags
+    // 13. Remove injected <style> tags
     // -------------------------------------------------------
     doc.querySelectorAll('style').forEach(function (s) { s.remove(); });
   }
