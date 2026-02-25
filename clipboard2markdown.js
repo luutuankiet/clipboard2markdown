@@ -45,7 +45,14 @@ var decodeHtmlEntities = function (text) {
 
 var renderInlineMarkdown = function (text) {
   var codeSegments = [];
-  var withCodePlaceholders = escapeHtml(text).replace(/`([^`]+)`/g, function (_, codeText) {
+  var withHtmlPlaceholders = String(text || '')
+    .replace(/<br\s*\/?>/gi, '%%HTML_BR%%')
+    .replace(/&nbsp;/gi, '%%HTML_NBSP%%')
+    .replace(/%%HTML_BR%%( +)/g, function (_, spaces) {
+      return '%%HTML_BR%%' + '%%HTML_NBSP%%'.repeat(spaces.length);
+    });
+
+  var withCodePlaceholders = escapeHtml(withHtmlPlaceholders).replace(/`([^`]+)`/g, function (_, codeText) {
     var index = codeSegments.push(codeText) - 1;
     return '%%CODE_' + index + '%%';
   });
@@ -56,9 +63,12 @@ var renderInlineMarkdown = function (text) {
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
     .replace(/~~([^~]+)~~/g, '<del>$1</del>');
 
-  return rendered.replace(/%%CODE_(\d+)%%/g, function (_, index) {
-    return '<code>' + codeSegments[Number(index)] + '</code>';
-  });
+  return rendered
+    .replace(/%%CODE_(\d+)%%/g, function (_, index) {
+      return '<code>' + codeSegments[Number(index)] + '</code>';
+    })
+    .replace(/%%HTML_BR%%/g, '<br>')
+    .replace(/%%HTML_NBSP%%/g, '&nbsp;');
 };
 
 var splitTableCells = function (line) {

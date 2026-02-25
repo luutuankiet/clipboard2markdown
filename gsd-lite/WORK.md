@@ -1079,3 +1079,122 @@ graph TD
 **Fork paths:**
 - Continue execution → add `tests/fixtures/google-docs/*` nested-list fixture pair and run `npm test`.
 - Discuss product behavior → decide whether preview parser should eventually be replaced by a full markdown engine.
+
+### [LOG-027] - [EXEC] [BUG] - Google Sheets SQL table preview now preserves `<br>` and indentation - Task: TASK-015
+**Timestamp:** 2026-02-25 10:40
+**Depends On:** LOG-017 (Google Sheets table sanitizer patterns), LOG-020 (preview UX architecture), LOG-026 (recent preview parser hardening)
+
+---
+
+#### Narrative Arc
+User reported two regressions in Google Sheets `Custom SQL queries` cells:
+1) `<br>` tags were shown literally in markdown preview.
+2) SQL indentation after each line break was missing in preview even though converted markdown text was correct.
+
+We traced this to preview rendering semantics, not conversion correctness. The fix was applied in the preview layer and CSS, while keeping canonical markdown output clean.
+
+#### What We Got Wrong and Pivot
+- **Initial wrong move:** attempted indentation preservation in `src/converter.js` by injecting `&nbsp;` after `<br>`.
+- **Why this was wrong:** converter output is canonical copy payload and should not carry preview-only rendering hacks.
+- **Pivot:** move indentation handling to `clipboard2markdown.js` preview renderer and CSS, then remove converter-side `&nbsp;` logic.
+
+#### Evidence
+**Evidence A - Preview escaped literal `<br>` before inline rendering**
+Citation: `clipboard2markdown.js:48`
+```js
+var withHtmlPlaceholders = String(text || '')
+  .replace(/<br\s*\/?>/gi, '%%HTML_BR%%')
+  .replace(/&nbsp;/gi, '%%HTML_NBSP%%')
+```
+
+**Evidence B - Spaces after line breaks are now preserved for visual indentation**
+Citations: `clipboard2markdown.js:51`, `clipboard2markdown.js:52`, `clipboard2markdown.js:71`
+```js
+.replace(/%%HTML_BR%%( +)/g, function (_, spaces) {
+  return '%%HTML_BR%%' + '%%HTML_NBSP%%'.repeat(spaces.length);
+})
+...
+.replace(/%%HTML_BR%%/g, '<br>')
+.replace(/%%HTML_NBSP%%/g, '&nbsp;');
+```
+
+**Evidence C - Table cell CSS now keeps pre-wrapped whitespace in preview**
+Citation: `index.html:155`
+```css
+#markdown-preview td {
+  white-space: pre-wrap;
+}
+```
+
+**Evidence D - Converter remains source-of-truth for markdown placeholders only**
+Citation: `src/converter.js:67`
+```js
+.replace(/\{\{TABLE_BR\}\}/g, '<br>')
+```
+
+#### Hypothesis Tracking
+| Hypothesis | Likelihood | Test | Status |
+|---|---|---|---|
+| `&lt;br&gt;` appears because preview escapes HTML too early | High | Add placeholder pass before `escapeHtml()` in inline renderer | ✅ Confirmed |
+| Indent loss is from converter cleanup | Medium | Remove converter-side indent hack and inspect preview behavior | ❌ Rejected |
+| Indent loss is browser whitespace collapse in table cells | High | Preserve spaces via NBSP placeholder and `white-space: pre-wrap` | ✅ Confirmed |
+
+#### Implementation Checklist
+| Step | Action | Verification | Status |
+|---|---|---|---|
+| 1 | Add `<br>` and `&nbsp;` placeholders before `escapeHtml()` | `<br>` now renders as actual line breaks in preview | ✅ |
+| 2 | Convert spaces after line-break placeholders into NBSP placeholders | SQL leading spaces now visible after each rendered `<br>` | ✅ |
+| 3 | Restore placeholders after inline markdown/link parsing | Links and code rendering still intact | ✅ |
+| 4 | Add `white-space: pre-wrap` to markdown preview table cells | Browser no longer collapses preserved spacing in table cells | ✅ |
+| 5 | Remove converter-side preview hack | Canonical markdown output stays clean and stable | ✅ |
+
+#### Decision Record and Rejected Alternatives
+**Chosen path:** Keep conversion output pure; handle preview-only visual fidelity in preview renderer + CSS.
+
+**Rejected alternatives:**
+- **Global converter escape override for brackets/backticks/indent visuals only** - rejected for this issue because it broadens blast radius beyond preview.
+- **Inject HTML entities into converter output for indentation** - rejected because copied markdown should not include presentation-only artifacts.
+- **Replace custom preview renderer with full markdown runtime now** - rejected as out-of-scope for this bug; targeted fix was sufficient.
+
+#### Source Citations Table
+| Source | Location | Key Finding |
+|---|---|---|
+| Preview inline renderer | `clipboard2markdown.js:48` | Introduced placeholder path to prevent literal `<br>` escaping. |
+| Preview indent preservation | `clipboard2markdown.js:51` | Spaces after break markers are transformed into NBSP placeholders. |
+| Preview placeholder restore | `clipboard2markdown.js:71` | Placeholder restoration emits actual `<br>` and `&nbsp;` for display. |
+| Preview cell styling | `index.html:155` | `white-space: pre-wrap` preserves indentation in table cells. |
+| Converter post-process | `src/converter.js:67` | Converter keeps only canonical placeholder restoration responsibilities. |
+
+#### Flow Sketch
+```mermaid
+graph TD
+    A[Google Sheets HTML in table cell] --> B[converter sanitize and turndown]
+    B --> C[markdown contains br tokens restored as br]
+    C --> D[preview renderInlineMarkdown]
+    D --> E[placeholder protect br and nbsp]
+    E --> F[escape and inline markdown parsing]
+    F --> G[restore br and nbsp placeholders]
+    G --> H[table cell css pre wrap]
+    H --> I[indented SQL displayed correctly]
+```
+
+#### Dependency Chain
+- LOG-027 extends LOG-017 table-sanitization strategy for SQL-heavy Sheets cells.
+- LOG-027 reinforces LOG-020 principle: preview is an interpretation layer, not canonical conversion output.
+- LOG-027 follows LOG-026 pattern: fix semantics at the right layer and avoid cross-layer side effects.
+
+---
+
+📦 STATELESS HANDOFF
+**Layer 1 — Local Context:**
+→ Last action: LOG-027 fixed Google Sheets SQL preview fidelity for line breaks and indentation.
+→ Dependency chain: LOG-027 ← LOG-017 ← LOG-020 ← LOG-026
+→ Next action: Add a focused `tests/fixtures/google-sheets/custom_sql_queries.{html,md}` pair for conversion regression coverage.
+
+**Layer 2 — Global Context:**
+→ Architecture: canonical markdown is produced by `src/converter.js`; preview rendering is owned by `clipboard2markdown.js` and view CSS.
+→ Patterns: keep conversion deterministic and source-faithful; implement display-only behavior in preview layer.
+
+**Fork paths:**
+- Continue execution → add fixture pair and run `npm test` to lock behavior.
+- Discuss architecture → evaluate whether to keep custom preview parser or adopt a dedicated markdown renderer.

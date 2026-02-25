@@ -64,8 +64,11 @@ var escape = function (str) {
             .replace(/[\u2013\u2015]/g, '--')
             .replace(/\u2014/g, '---')
             .replace(/\u2026/g, '...')
-            .replace(/\{\{TABLE_BR\}\}/g, '<br>')  // Table cell line breaks
-            .replace(/\{\{PIPE\}\}/g, '\\|')      // Escaped pipes in table cells
+            .replace(/\{\{TABLE_BR\}\}/g, '<br>')   // Table cell line breaks
+            .replace(/\{\{PIPE\}\}/g, '\\|')       // Escaped pipes in table cells
+            .replace(/\{\{GS_LBRACK\}\}/g, '[')    // Google Sheets literals
+            .replace(/\{\{GS_RBRACK\}\}/g, ']')
+            .replace(/\{\{GS_BKTICK\}\}/g, '`')
             .replace(/[ ]+\n/g, '\n')
             .replace(/\s*\\\n/g, '\\\n')
             .replace(/\s*\\\n\s*\\\n/g, '\n\n')

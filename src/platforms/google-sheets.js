@@ -50,6 +50,26 @@ export default {
       });
       
       // ===========================================
+      // SQL/LITERAL SAFETY: Protect [ ], and ` in Sheets table cells
+      // Turndown escapes these characters aggressively (\[, \], \`) which
+      // corrupts SQL snippets copied from Sheets.
+      // ===========================================
+      table.querySelectorAll('td, th').forEach(function (cell) {
+        var cellWalker = doc.createTreeWalker(cell, NodeFilter.SHOW_TEXT, null, false);
+        var cellTextNodes = [];
+        while (cellWalker.nextNode()) {
+          cellTextNodes.push(cellWalker.currentNode);
+        }
+        cellTextNodes.forEach(function (textNode) {
+          if (!textNode.textContent) return;
+          textNode.textContent = textNode.textContent
+            .replace(/\[/g, '{{GS_LBRACK}}')
+            .replace(/\]/g, '{{GS_RBRACK}}')
+            .replace(/`/g, '{{GS_BKTICK}}');
+        });
+      });
+
+      // ===========================================
       // PIPE ESCAPE: Replace | in link text with placeholder
       // Markdown tables use | as column separator. If link text contains |,
       // it breaks the table structure: [text | more](url) splits the cell.
