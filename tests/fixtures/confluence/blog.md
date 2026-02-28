@@ -13,11 +13,12 @@ measure: returned_total_sale_price {
   description: "Total revenue from customers who have previously purchased but had no activity for over 90 days."
 
   # The context lives here, in the model, where it belongs:
-​
+  synonyms: ["win-back revenue", "winback sales", "re-engagement revenue"]
 }
+
 ```
 
-![image-20251116-092912.png](https://media-cdn.atlassian.com/file/619c9111-f5dd-4b9d-a92c-707203a4a1bd/image/cdn?allowAnimated=true&client=a1ab72a3-58cb-458b-9f89-664a4cc5eb54&collection=contentId-1384611841&height=125&max-age=2592000&mode=full-fit&source=mediaCard&token=eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhMWFiNzJhMy01OGNiLTQ1OGItOWY4OS02NjRhNGNjNWViNTQiLCJhY2Nlc3MiOnsidXJuOmZpbGVzdG9yZTpjb2xsZWN0aW9uOmNvbnRlbnRJZC0xMzg0NjExODQxIjpbInJlYWQiXX0sImV4cCI6MTc3MTg2MTM3MSwibmJmIjoxNzcxODU4NDkxLCJhYUlkIjoiNzEyMDIwOjM0MTE3ZGZjLTIxYWYtNGJlYi1hYzdhLTY5Yzg2MGU5M2RmMyIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9hcHBBY2NyZWRpdGVkIjpmYWxzZX0.euFJeeqNmuwMmHeiVfur3W7AHZZ9fJ3poasS9ZDCizM&width=374)
+![image-20251116-092912.png](https://media-cdn.atlassian.com/file/619c9111-f5dd-4b9d-a92c-707203a4a1bd/image/cdn?allowAnimated=true&client=a1ab72a3-58cb-458b-9f89-664a4cc5eb54&collection=contentId-1384611841&height=125&max-age=2592000&mode=full-fit&source=mediaCard&token=eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhMWFiNzJhMy01OGNiLTQ1OGItOWY4OS02NjRhNGNjNWViNTQiLCJhY2Nlc3MiOnsidXJuOmZpbGVzdG9yZTpjb2xsZWN0aW9uOmNvbnRlbnRJZC0xMzg0NjExODQxIjpbInJlYWQiXX0sImV4cCI6MTc3MjI3MTc0NSwibmJmIjoxNzcyMjY4ODY1LCJhYUlkIjoiNzEyMDIwOjM0MTE3ZGZjLTIxYWYtNGJlYi1hYzdhLTY5Yzg2MGU5M2RmMyIsImh0dHBzOi8vaWQuYXRsYXNzaWFuLmNvbS9hcHBBY2NyZWRpdGVkIjpmYWxzZX0.07NOEtxvfq6XQ2gHsb3K-7IzuZcUy-c6XDhpLwurR5k&width=374)
 
 *This architecture enables a continuous, collaborative governance cycle, where business and data teams work together to keep the agent's knowledge current.*
 

@@ -130,6 +130,16 @@ No code required. Just add data:
 2.  **Define**: Create `tests/fixtures/{platform}/{case}.md` with the expected Markdown.
 3.  **Verify**: Run `npm test`. The runner automatically picks up the new pair.
 
+**Division of Labor:**
+- **User maintains fixtures** — creates/updates `.html` and `.md` test pairs based on real-world usage
+- **Agents implement code** — modifies `src/platforms/` logic and conversion rules to fix failures
+
+### Debugging Test Failures
+When `npm test` fails, the runner writes a detailed report to `./test_md.txt` containing:
+- Full expected vs. actual markdown output for each failure
+- Error messages with line-by-line diffs
+- Easy copy-paste format for troubleshooting and fixture updates
+
 ## Entry Points
 
 -   **`package.json`**: Look at the `scripts` to understand how to run the dev server (`dev`), build (`build`), and test (`test`).

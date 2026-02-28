@@ -34,8 +34,9 @@ case
     when reference_number like 'IDEAL' then 'iDeal'
     when reference_number like 'SOFORT' then 'sofort'
     when payment_method like 'paypal_express_checkout' then 'paypal'
-    else payment_method -- ⚠️ Failure mode A : IF NULL → payment_cost_source = NULL
+    else payment_method  -- ⚠️ Failure mode A : IF NULL → payment_cost_source = NULL
 end as payment_cost_source
+
 ```
 
 **Step 2: JOIN to seed in** `fct_transactions.sql` **(CTE: join_trx_costs)**
@@ -50,6 +51,7 @@ join_trx_costs as (
     left join payment_method_costs as pymt on trx.payment_cost_source = pymt.type
 -- ⚠️ Failure mode B : NULL if seed has missing payment type
   ),
+
 ```
 
 ### The Two Failure Modes We Discovered

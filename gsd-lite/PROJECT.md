@@ -130,6 +130,7 @@ This standard is now part of product intent, not just implementation detail, so 
 - **Browser-only:** No server-side processing — the paste-based approach IS the feature
 - **Automated Testing:** An `npm test` script uses `jsdom` to run all test fixtures in `tests/fixtures/` against the conversion logic, ensuring no regressions are introduced.
 - **Generic code fencing:** Don't try to detect language — just use ``` without hints
+- **Fixture maintenance:** User maintains test fixtures (`.html`/`.md` pairs in `tests/fixtures/`). Agents implement code changes to `src/platforms/` and conversion logic.
 
 ## Architecture Decision
 

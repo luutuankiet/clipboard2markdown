@@ -4,6 +4,35 @@ export default {
   rules: [],
   sanitizer: function (doc) {
     // ===========================================
+    // CONFLUENCE: Normalize code blocks to <PRE><CODE> structure
+    // ===========================================
+    doc.querySelectorAll('.code-block, [data-ds--code--code-block]').forEach(function (codeBlock) {
+      // Find the <code> element inside the Confluence wrapper structure
+      var codeElement = codeBlock.querySelector('code');
+      if (!codeElement) return;
+
+      // Extract language hint if present (e.g., data-code-lang="xml")
+      var langSpan = codeBlock.querySelector('[data-code-lang]');
+      var lang = langSpan ? langSpan.getAttribute('data-code-lang') : '';
+
+      // Create standard <PRE><CODE> structure
+      var pre = doc.createElement('pre');
+      var code = doc.createElement('code');
+      
+      // Preserve language as class if present (though we output generic ``` per PROJECT.md)
+      if (lang) {
+        code.className = 'language-' + lang;
+      }
+      
+      // Transfer the actual code content
+      code.textContent = codeElement.textContent;
+      pre.appendChild(code);
+
+      // Replace the complex Confluence wrapper with clean structure
+      codeBlock.replaceWith(pre);
+    });
+
+    // ===========================================
     // CONFLUENCE: Convert Smart Links (inline cards) to <a> tags
     // ===========================================
     doc.querySelectorAll('span[data-inline-card][data-card-url]').forEach(function (span) {
