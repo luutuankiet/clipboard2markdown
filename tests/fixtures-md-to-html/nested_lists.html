@@ -1,0 +1,25 @@
+<h3>[LOG-007] - [PLAN] - Refactor and implement automated testing - Task: TASK-007, TASK-008</h3>
+<p><strong>Timestamp:</strong> 2026-02-10<br><strong>Details:</strong></p>
+<ul style="display: block; margin-left: 24px;">
+<li style="display: list-item;"><strong>Goal:</strong> Improve maintainability and prevent regressions.</li>
+<li style="display: list-item;"><strong>New Tasks Created:</strong><ul style="display: block; margin-left: 24px; margin-top: 4px; margin-bottom: 4px;">
+<li style="display: list-item;"><strong>TASK-007:</strong> Refactor platform-specific logic into a modular <code>src/platforms/</code> directory.</li>
+<li style="display: list-item;"><strong>TASK-008:</strong> Implement an automated test runner to verify fixtures.</li>
+</ul>
+</li>
+<li style="display: list-item;"><strong>Refactor Plan (TASK-007):</strong><ol style="display: block; margin-left: 24px; margin-top: 4px; margin-bottom: 4px;">
+<li style="display: list-item;">Move all generic rules (sup, sub, etc.) and sanitizers from <code>clipboard2markdown.js</code> to <code>src/platforms/common.js</code>.</li>
+<li style="display: list-item;">Update <code>src/platforms/index.js</code> to import and export all platform modules.</li>
+<li style="display: list-item;">Refactor <code>clipboard2markdown.js</code> into a slim orchestrator that imports <code>addAllRules</code> and <code>sanitize</code> from <code>src/platforms/index.js</code> and focuses only on DOM event handling.</li>
+</ol>
+</li>
+<li style="display: list-item;"><strong>Automated Test Plan (TASK-008):</strong><ol style="display: block; margin-left: 24px; margin-top: 4px; margin-bottom: 4px;">
+<li style="display: list-item;">Install <code>vitest</code> and <code>jsdom</code> as dev dependencies.</li>
+<li style="display: list-item;">Create a test file (e.g., <code>tests/conversion.test.js</code>).</li>
+<li style="display: list-item;">The test script will read all <code>.html</code> and <code>.md</code> file pairs from <code>tests/fixtures/</code>.</li>
+<li style="display: list-item;">For each pair, it will run the <code>convert</code> function on the HTML and assert that the output exactly matches the expected markdown.</li>
+<li style="display: list-item;">Update <code>package.json</code> to run tests via <code>npm test</code>.</li>
+</ol>
+</li>
+<li style="display: list-item;"><strong>Decision:</strong> This modular structure makes it easy to add new platforms (Confluence, Notion) and test cases in the future.</li>
+</ul>

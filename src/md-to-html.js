@@ -14,6 +14,40 @@ import { marked } from 'marked';
 marked.setOptions({ gfm: true });
 
 /**
+ * Fix nested lists for Google Docs compatibility.
+ * Google Docs needs nested <ul>/<ol> to be properly separated from parent content.
+ */
+function fixNestedListsForGoogleDocs(html, domParser) {
+  var parser = domParser || new DOMParser();
+  var doc = parser.parseFromString(html, 'text/html');
+  
+  // Find all nested lists (ul/ol inside li)
+  doc.querySelectorAll('li > ul, li > ol').forEach(function (nestedList) {
+    // Add display:block and margin to ensure proper rendering
+    nestedList.style.display = 'block';
+    nestedList.style.marginLeft = '24px';
+    nestedList.style.marginTop = '4px';
+    nestedList.style.marginBottom = '4px';
+  });
+  
+  // Ensure all list items have proper display
+  doc.querySelectorAll('li').forEach(function (li) {
+    li.style.display = 'list-item';
+  });
+  
+  // Ensure all lists have proper display
+  doc.querySelectorAll('ul, ol').forEach(function (list) {
+    list.style.display = 'block';
+    if (!list.style.marginLeft && !list.parentElement.matches('li')) {
+      // Top-level lists
+      list.style.marginLeft = '24px';
+    }
+  });
+  
+  return doc.body.innerHTML;
+}
+
+/**
  * Apply Google Docs-compatible inline styles to tables.
  */
 function applyGoogleDocsTableStyles(html, domParser) {
@@ -132,8 +166,10 @@ export function convertMdToHtml(markdown, options) {
   var withNewlines = preserveNewlinesInHtml(rawHtml, domParser);
   // 4. Preserve whitespace after <br> tags
   var withPreservedSpaces = preserveWhitespaceAfterBr(withNewlines);
-  // 5. Apply Google Docs table styling
-  return applyGoogleDocsTableStyles(withPreservedSpaces, domParser);
+  // 5. Fix nested lists for Google Docs
+  var withFixedLists = fixNestedListsForGoogleDocs(withPreservedSpaces, domParser);
+  // 6. Apply Google Docs table styling
+  return applyGoogleDocsTableStyles(withFixedLists, domParser);
 }
 
 // Also export individual functions for testing
@@ -141,5 +177,6 @@ export {
   applyGoogleDocsTableStyles,
   preserveWhitespaceAfterBr,
   escapeXmlLikeTags,
-  preserveNewlinesInHtml
+  preserveNewlinesInHtml,
+  fixNestedListsForGoogleDocs
 };
