@@ -69,6 +69,8 @@ var escape = function (str) {
             .replace(/\{\{GS_LBRACK\}\}/g, '[')    // Google Sheets literals
             .replace(/\{\{GS_RBRACK\}\}/g, ']')
             .replace(/\{\{GS_BKTICK\}\}/g, '`')
+            .replace(/\{\{GS_SPACE\}\}/g, ' ')     // Google Sheets preserved spaces (indentation)
+            .replace(/\{\{GS_TAB\}\}/g, '\t')      // Google Sheets preserved tabs
             .replace(/[ ]+\n/g, '\n')
             .replace(/\s*\\\n/g, '\\\n')
             .replace(/\s*\\\n\s*\\\n/g, '\n\n')

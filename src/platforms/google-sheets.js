@@ -37,7 +37,19 @@ export default {
       });
       
       // Then: replace remaining <br> in cells with placeholder
+      // Also preserve leading whitespace after <br> (indentation)
       table.querySelectorAll('td br, th br').forEach(function (br) {
+        var next = br.nextSibling;
+        // If next sibling is a text node with leading spaces, protect them
+        if (next && next.nodeType === 3) {
+          var text = next.textContent;
+          var leadingSpaces = text.match(/^[ \t]+/);
+          if (leadingSpaces) {
+            // Replace each space with placeholder to prevent HTML normalization
+            var preserved = leadingSpaces[0].replace(/ /g, '{{GS_SPACE}}').replace(/\t/g, '{{GS_TAB}}');
+            next.textContent = preserved + text.slice(leadingSpaces[0].length);
+          }
+        }
         br.replaceWith('{{TABLE_BR}}');
       });
       
@@ -96,6 +108,43 @@ export default {
       table.querySelectorAll('td div, th div').forEach(function (div) {
         // Replace div with its text content
         div.replaceWith(div.textContent);
+      });
+      
+      // ===========================================
+      // INLINE STYLE CONVERSION: Bold and Italic spans → semantic tags
+      // Google Sheets uses inline styles (font-weight:bold, font-style:italic)
+      // instead of <strong>/<em> tags. Turndown only recognizes semantic tags.
+      // ===========================================
+      table.querySelectorAll('span[style]').forEach(function (span) {
+        var style = span.getAttribute('style') || '';
+        var isBold = /font-weight\s*:\s*bold/i.test(style) || /font-weight\s*:\s*700/i.test(style);
+        var isItalic = /font-style\s*:\s*italic/i.test(style);
+        
+        if (isBold && isItalic) {
+          // Bold + Italic: wrap in <strong><em>
+          var strong = doc.createElement('strong');
+          var em = doc.createElement('em');
+          while (span.firstChild) {
+            em.appendChild(span.firstChild);
+          }
+          strong.appendChild(em);
+          span.replaceWith(strong);
+        } else if (isBold) {
+          // Bold only: convert span to <strong>
+          var strongEl = doc.createElement('strong');
+          while (span.firstChild) {
+            strongEl.appendChild(span.firstChild);
+          }
+          span.replaceWith(strongEl);
+        } else if (isItalic) {
+          // Italic only: convert span to <em>
+          var emEl = doc.createElement('em');
+          while (span.firstChild) {
+            emEl.appendChild(span.firstChild);
+          }
+          span.replaceWith(emEl);
+        }
+        // Non-bold/italic spans are left as-is (will be handled by Turndown)
       });
       
       // ===========================================
