@@ -251,12 +251,25 @@
                         <svg height="16" viewBox="0 0 16 16" width="16" style="vertical-align: text-bottom; fill: currentColor; margin-right: 4px;"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>Fork me on GitHub
                     </a>
                 </div>
-                <p>Convert rich text from <strong>Jira, Confluence, Slack</strong>, and more into clean, AI-ready Markdown.</p>
-                <ul>
-                    <li><strong>Desktop:</strong> <code>Ctrl+V</code> or <code>&#8984;+V</code></li>
-                    <li><strong>Mobile:</strong> Tap the box below, long-press, and choose Paste</li>
-                </ul>
-                <p><small>Runs 100% locally in your browser using <a href="https://github.com/mixmark-io/turndown" target="_blank">Turndown</a>. No data is sent to any server.</small></p>
+                <div id="info-html-to-md">
+                    <p><strong>🔄 Bidirectional clipboard converter</strong> — now with two modes!</p>
+                    <p>Convert rich text from <strong>Jira, Confluence, Slack</strong>, and more into clean, AI-ready Markdown.</p>
+                    <ul>
+                        <li><strong>Desktop:</strong> <code>Ctrl+V</code> or <code>&#8984;+V</code></li>
+                        <li><strong>Mobile:</strong> Tap the box below, long-press, and choose Paste</li>
+                    </ul>
+                    <p><small>Powered by <a href="https://github.com/mixmark-io/turndown" target="_blank">Turndown</a>. Runs 100% locally — no data sent to any server.</small></p>
+                </div>
+                <div id="info-md-to-html" class="hidden">
+                    <p><strong>📝 Markdown → Google Docs</strong> — paste formatted content without the hassle!</p>
+                    <p>Paste your Markdown and get <strong>Google Docs-ready HTML</strong> with styled tables (blue headers, borders) and proper formatting.</p>
+                    <ul>
+                        <li><strong>Tables:</strong> Auto-styled with blue headers (#c9daf8) and 0.5pt borders</li>
+                        <li><strong>Lists:</strong> Nested lists preserved with proper indentation</li>
+                        <li><strong>Code:</strong> Inline <code>`code`</code> renders correctly</li>
+                    </ul>
+                    <p><small>Powered by <a href="https://github.com/markedjs/marked" target="_blank">marked</a>. Runs 100% locally — no data sent to any server.</small></p>
+                </div>
             </section>
             <div contenteditable="true" data-placeholder="Tap here, then paste your copied content" id="pastebin"></div>
             <section id="wrapper">

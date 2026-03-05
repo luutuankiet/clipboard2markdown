@@ -365,6 +365,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
+  var infoHtmlToMd = document.querySelector('#info-html-to-md');
+  var infoMdToHtml = document.querySelector('#info-md-to-html');
+
   var setMode = function (mode) {
     currentMode = mode;
     modeBtns.forEach(function (btn) {
@@ -376,6 +379,10 @@ document.addEventListener('DOMContentLoaded', function () {
     copyHtmlBtn.classList.toggle('hidden', !isHtmlToMd);
     copyMdBtn.classList.toggle('hidden', !isHtmlToMd);
     copyGdocsBtn.classList.toggle('hidden', isHtmlToMd);
+
+    // Toggle info sections
+    if (infoHtmlToMd) infoHtmlToMd.classList.toggle('hidden', !isHtmlToMd);
+    if (infoMdToHtml) infoMdToHtml.classList.toggle('hidden', isHtmlToMd);
 
     // Update placeholder text
     pastebin.setAttribute('data-placeholder', 

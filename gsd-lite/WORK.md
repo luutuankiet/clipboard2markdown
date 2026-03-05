@@ -5,11 +5,11 @@
 ## 1. Current Understanding (Read First)
 
 <current_mode>
-planning
+execution_complete
 </current_mode>
 
 <active_task>
-TASK-015: Implement bidirectional conversion — MD → HTML with Google Docs-ready table styling
+None — TASK-015 complete
 </active_task>
 
 <parked_tasks>
@@ -46,7 +46,7 @@ None
 </blockers>
 
 <next_action>
-Design UI for bidirectional mode toggle and implement MD → HTML conversion with opinionated table styling.
+User to add test fixtures for MD → HTML conversion cases. Consider next feature priority.
 </next_action>
 
 ---
@@ -60,6 +60,7 @@ Design UI for bidirectional mode toggle and implement MD → HTML conversion wit
 - LOG-020: Trust UX pattern — preview tabs + collapsible input to reduce ambiguity.
 - LOG-021: Cross-platform annotation contract — unified structure semantics for Jira, Slack, and Google Chat, with extension rules for future platforms.
 - LOG-028: Bidirectional conversion feature — MD → HTML direction for Google Docs paste workflow.
+- LOG-029: Bidirectional conversion shipped — marked.js integration, Google Docs styling, test infrastructure.
 
 ---
 
@@ -1353,3 +1354,111 @@ Target output matches user's manual formatting:
 **Fork paths:**
 - Continue to implementation → Start with mode toggle UI and parser integration
 - Discuss further → Refine table styling, explore other formatting options
+
+---
+
+### [LOG-029] - [EXEC] - Bidirectional MD → HTML conversion shipped - Task: TASK-015
+**Timestamp:** 2026-03-05
+**Depends On:** LOG-028 (vision and decisions)
+
+---
+
+#### Summary
+
+Implemented full MD → HTML conversion with Google Docs-ready styling. The webapp now supports bidirectional clipboard conversion:
+- **HTML → MD:** Powered by Turndown (existing)
+- **MD → HTML:** Powered by marked.js (new)
+
+#### Implementation Details
+
+| Component | File | Purpose |
+|-----------|------|--------|
+| Download script | `script/download_marked.py` | Fetches marked.js to lib/ |
+| Core module | `src/md-to-html.js` | Conversion logic (extracted for testability) |
+| UI toggle | `index.html` | Mode switcher + contextual info sections |
+| Event wiring | `clipboard2markdown.js` | Mode state, paste handling, clipboard write |
+| Test runner | `tests/md-to-html.test.js` | Fixture-based regression tests |
+| Test fixtures | `tests/fixtures-md-to-html/` | Organized by category: tables/, xml-tags/, lists/, whitespace/ |
+
+#### Conversion Pipeline
+
+```mermaid
+flowchart LR
+    A[Markdown Input] --> B[escapeXmlLikeTags]
+    B --> C[marked.parse]
+    C --> D[preserveNewlinesInHtml]
+    D --> E[preserveWhitespaceAfterBr]
+    E --> F[fixNestedListsForGoogleDocs]
+    F --> G[applyGoogleDocsTableStyles]
+    G --> H[Final HTML]
+```
+
+#### Bugs Fixed During Implementation
+
+| Bug | Root Cause | Fix |
+|-----|------------|-----|
+| Table columns equal width | Hardcoded `width: 25%` | Removed fixed widths — content determines size |
+| Whitespace after `<br>` trimmed | HTML collapses spaces | Convert spaces to `&nbsp;` |
+| XML tags disappear | Browser parses as unknown elements | Escape non-standard tags to `&lt;tag&gt;` |
+| Newlines inside XML blocks collapsed | marked treats as single block | `preserveNewlinesInHtml()` converts `\n` to `<br>` |
+| Extra `<br>` before list items | Newlines between tags converted | Skip whitespace-only text nodes |
+| Nested lists flattened | Google Docs needs explicit styling | `fixNestedListsForGoogleDocs()` adds `display:block` + margins |
+
+#### Google Docs Table Styling
+
+| Property | Value |
+|----------|-------|
+| Header background | `#c9daf8` (light blue) |
+| All borders | `solid #000000 0.5pt` |
+| Column widths | Auto (content-based) |
+| Padding | `6px 8px` |
+
+#### Test Infrastructure
+
+**How to add test cases:**
+1. Create `tests/fixtures-md-to-html/{category}/{name}.md` — input
+2. Create `tests/fixtures-md-to-html/{category}/{name}.html` — expected output
+3. Run `npm test` — auto-discovers and runs all pairs
+
+**Fixture categories created:**
+- `tables/` — Basic tables, tables with `<br>` and SQL
+- `xml-tags/` — GSD-lite format tags like `<current_mode>`
+- `lists/` — Numbered lists, nested lists
+- `whitespace/` — Indentation preservation
+
+#### Landing Page Updates
+
+- Added contextual info sections that switch based on active mode
+- HTML→MD mode: Shows Turndown attribution, Jira/Confluence/Slack focus
+- MD→HTML mode: Shows marked attribution, Google Docs styling features
+- "Bidirectional clipboard converter" headline
+
+#### Files Changed
+
+| File | Change |
+|------|--------|
+| `script/download_marked.py` | NEW — downloads marked.js |
+| `src/md-to-html.js` | NEW — conversion module |
+| `tests/md-to-html.test.js` | NEW — test runner |
+| `tests/fixtures-md-to-html/` | NEW — fixture directories |
+| `package.json` | Added marked dependency |
+| `index.html` | Mode toggle, contextual info sections |
+| `clipboard2markdown.js` | Mode state, import from md-to-html.js |
+
+---
+
+📦 STATELESS HANDOFF
+
+**Layer 1 — Local Context:**
+→ Last action: LOG-029 (Shipped bidirectional MD → HTML conversion)
+→ Dependency chain: LOG-029 ← LOG-028 (vision)
+→ Next action: User to populate test fixtures; consider next feature priority
+
+**Layer 2 — Global Context:**
+→ Architecture: Vite + Turndown (HTML→MD) + marked (MD→HTML), modular `src/` structure
+→ Patterns: Preview tabs (LOG-020), fixture-based testing, Google Docs clipboard API
+
+**Fork paths:**
+- Add test fixtures → `tests/fixtures-md-to-html/{category}/`
+- New feature → Review INBOX.md for parked ideas
+- Refine styling → Adjust table colors, add themes
