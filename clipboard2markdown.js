@@ -1,9 +1,6 @@
 import mermaid from 'mermaid';
-import { marked } from 'marked';
 import { convert } from './src/converter.js';
-
-// Configure marked for GFM (tables, etc.)
-marked.setOptions({ gfm: true });
+import { convertMdToHtml } from './src/md-to-html.js';
 
 // ===========================================
 // UI HELPERS
@@ -397,115 +394,7 @@ document.addEventListener('DOMContentLoaded', function () {
     setPreviewMode(false, { skipFocus: true });
   };
 
-  var applyGoogleDocsTableStyles = function (html) {
-    // Parse HTML and add inline styles for Google Docs compatibility
-    var parser = new DOMParser();
-    var doc = parser.parseFromString(html, 'text/html');
-    
-    doc.querySelectorAll('table').forEach(function (table) {
-      table.style.borderCollapse = 'collapse';
-      table.style.width = '100%';
-      
-      doc.querySelectorAll('th').forEach(function (th) {
-        th.style.backgroundColor = '#c9daf8';
-        th.style.border = 'solid #000000 0.5pt';
-        th.style.padding = '6px 8px';
-        // No fixed width — let content determine column size
-      });
-      
-      doc.querySelectorAll('td').forEach(function (td) {
-        td.style.border = 'solid #000000 0.5pt';
-        td.style.padding = '6px 8px';
-        // No fixed width — let content determine column size
-      });
-    });
-    
-    return doc.body.innerHTML;
-  };
-
-  var preserveWhitespaceAfterBr = function (html) {
-    // Convert spaces after <br> to &nbsp; to preserve indentation
-    return html.replace(/<br\s*\/?>(\s+)/gi, function (match, spaces) {
-      return '<br>' + spaces.split('').map(function () { return '&nbsp;'; }).join('');
-    });
-  };
-
-  var escapeXmlLikeTags = function (markdown) {
-    // Escape XML-like tags that aren't standard HTML
-    // Match tags like <current_mode>, <active_task>, etc. (containing underscores or not standard HTML)
-    var standardTags = /^(a|abbr|address|area|article|aside|audio|b|base|bdi|bdo|blockquote|body|br|button|canvas|caption|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|div|dl|dt|em|embed|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hgroup|hr|html|i|iframe|img|input|ins|kbd|label|legend|li|link|main|map|mark|menu|meta|meter|nav|noscript|object|ol|optgroup|option|output|p|param|picture|pre|progress|q|rp|rt|ruby|s|samp|script|section|select|slot|small|source|span|strong|style|sub|summary|sup|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|u|ul|var|video|wbr)$/i;
-    
-    return markdown.replace(/<(\/?)(\w[\w_-]*)([^>]*)>/g, function (match, slash, tagName, rest) {
-      if (standardTags.test(tagName)) {
-        return match; // Keep standard HTML tags
-      }
-      // Escape non-standard tags
-      return '&lt;' + slash + tagName + rest + '&gt;';
-    });
-  };
-
-  var preserveNewlinesInHtml = function (html) {
-    // Convert newlines to <br> in the final HTML to preserve line structure
-    // BUT only for text nodes that have actual content (not just whitespace between tags)
-    // Skip content inside <pre>, <code>, <table>, <ol>, <ul>, <li> tags
-    var parser = new DOMParser();
-    var doc = parser.parseFromString(html, 'text/html');
-    
-    var walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null, false);
-    var textNodes = [];
-    while (walker.nextNode()) {
-      textNodes.push(walker.currentNode);
-    }
-    
-    textNodes.forEach(function (node) {
-      // Skip if inside block-level elements where newlines are structural
-      var parent = node.parentNode;
-      while (parent && parent !== doc.body) {
-        var tag = parent.tagName;
-        if (tag === 'PRE' || tag === 'CODE' || tag === 'TABLE' || 
-            tag === 'OL' || tag === 'UL' || tag === 'LI') {
-          return;
-        }
-        parent = parent.parentNode;
-      }
-      
-      var text = node.textContent;
-      
-      // Skip whitespace-only nodes (these are formatting between tags)
-      if (/^\s*$/.test(text)) {
-        return;
-      }
-      
-      if (text.indexOf('\n') !== -1) {
-        var fragment = doc.createDocumentFragment();
-        var parts = text.split('\n');
-        parts.forEach(function (part, i) {
-          if (i > 0) {
-            fragment.appendChild(doc.createElement('br'));
-          }
-          if (part) {
-            fragment.appendChild(doc.createTextNode(part));
-          }
-        });
-        node.parentNode.replaceChild(fragment, node);
-      }
-    });
-    
-    return doc.body.innerHTML;
-  };
-
-  var convertMdToHtml = function (markdown) {
-    // 1. Escape XML-like tags before parsing
-    var escapedMd = escapeXmlLikeTags(markdown);
-    // 2. Parse markdown to HTML
-    var rawHtml = marked.parse(escapedMd);
-    // 3. Preserve newlines (convert \n to <br>)
-    var withNewlines = preserveNewlinesInHtml(rawHtml);
-    // 4. Preserve whitespace after <br> tags
-    var withPreservedSpaces = preserveWhitespaceAfterBr(withNewlines);
-    // 5. Apply Google Docs table styling
-    return applyGoogleDocsTableStyles(withPreservedSpaces);
-  };
+  // MD → HTML conversion logic is in src/md-to-html.js
 
   var setPreviewView = function (viewName) {
     activePreviewView = viewName;
