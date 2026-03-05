@@ -5,11 +5,11 @@
 ## 1. Current Understanding (Read First)
 
 <current_mode>
-discuss
+planning
 </current_mode>
 
 <active_task>
-TASK-014 executed end-to-end — Google Docs list hierarchy issue fixed across sanitizer and markdown preview renderer (nested bullets now retain depth).
+TASK-015: Implement bidirectional conversion — MD → HTML with Google Docs-ready table styling
 </active_task>
 
 <parked_tasks>
@@ -37,6 +37,8 @@ DECISION-012: App opens directly in main conversion view with visible paste targ
 DECISION-013: Cross-platform annotation contract — preserve conversational structure with visible separators + italic metadata annotations, using `data-attr + \u200B` to bypass Turndown escaping and keep output agent-readable.
 DECISION-014: Strip embedded base64 `data:image/...` payloads at sanitize time and replace with lightweight placeholders to protect agent context size.
 DECISION-015: Markdown preview renders Mermaid via client-side `mermaid.render(...)` with source normalization (`decodeHtmlEntities`) and explicit inline error fallback.
+DECISION-016: Extend clipboard2markdown to support MD → HTML direction — same mental model, already hosted, shareable via URL.
+DECISION-017: Bake Google Docs table styling into HTML output — blue header (#c9daf8), 0.5pt borders, equal column widths.
 </decisions>
 
 <blockers>
@@ -44,7 +46,7 @@ None
 </blockers>
 
 <next_action>
-User will add fixtures for the Google Docs nested-list regression and then decide whether to run a full fixture sweep for list-heavy docs.
+Design UI for bidirectional mode toggle and implement MD → HTML conversion with opinionated table styling.
 </next_action>
 
 ---
@@ -57,6 +59,7 @@ User will add fixtures for the Google Docs nested-list regression and then decid
 - LOG-019: Jira comment thread annotation pattern — `=== Thread X ===` + italic metadata headers.
 - LOG-020: Trust UX pattern — preview tabs + collapsible input to reduce ambiguity.
 - LOG-021: Cross-platform annotation contract — unified structure semantics for Jira, Slack, and Google Chat, with extension rules for future platforms.
+- LOG-028: Bidirectional conversion feature — MD → HTML direction for Google Docs paste workflow.
 
 ---
 
@@ -1198,3 +1201,155 @@ graph TD
 **Fork paths:**
 - Continue execution → add fixture pair and run `npm test` to lock behavior.
 - Discuss architecture → evaluate whether to keep custom preview parser or adopt a dedicated markdown renderer.
+
+### [LOG-028] - [VISION] [DECISION] - Bidirectional conversion: MD → HTML for Google Docs paste - Task: TASK-015
+**Timestamp:** 2026-03-05 14:30
+**Depends On:** None (new feature direction)
+
+---
+
+#### The Problem
+
+User works heavily in Markdown but needs to share polished documents with colleagues/clients via Google Docs. Current pain points:
+
+| Pain Point | Impact |
+|------------|--------|
+| Raw Cmd+C/Cmd+V pastes markdown as plain text | No formatting preserved |
+| Alfred workflow works but isn't shareable | Colleagues can't use it without Alfred |
+| Tables require 4 manual actions each | Hours wasted on document prep |
+
+**Manual table formatting loop (per table):**
+1. Pin header row
+2. Fill header with blue (#c9daf8)
+3. Set 0.5pt borders
+4. Resize column widths
+
+#### Discovery: Why Alfred Workflow Works
+
+User's existing Alfred workflow proves the concept:
+
+```mermaid
+flowchart LR
+    A[Clipboard<br/>contains MD] --> B[multimarkdown<br/>--nosmart]
+    B --> C[HTML output]
+    C --> D[Set pasteboard<br/>public.html + plain-text]
+    D --> E[Fake Cmd+V]
+    E --> F[Google Docs<br/>renders rich content]
+```
+
+**Key insight:** Google Docs respects HTML on the clipboard when pasted. The dual MIME type (`public.html` + `public.utf8-plain-text`) ensures compatibility.
+
+**Alfred workflow code analysis:**
+
+| Step | Code | Purpose |
+|------|------|---------|
+| 1 | `multimarkdown --nosmart` | Convert MD → HTML |
+| 2 | `NSPasteboard.setStringForType` | Set clipboard with `public.html` type |
+| 3 | Fake Cmd+V dispatch | Maintain pasteboard type on paste |
+
+#### Decision: Bidirectional Webapp
+
+**DECISION-016: Extend clipboard2markdown to support MD → HTML direction**
+
+Rationale:
+- Same mental model ("clipboard converter")
+- Already hosted on GitHub Pages
+- Already has test harness infrastructure
+- Client-side = no auth, no data leakage
+- Shareable with colleagues via URL
+
+#### Technical Approach
+
+**Webapp equivalent of Alfred workflow:**
+
+| Alfred Step | Webapp Equivalent |
+|-------------|-------------------|
+| `multimarkdown --nosmart` | JS markdown parser (marked/markdown-it/showdown) |
+| Set pasteboard `public.html` | Clipboard API with `text/html` MIME type |
+| Fake Cmd+V | User pastes manually (browser limitation) |
+
+**Clipboard API pattern:**
+```javascript
+// User clicks "Copy for Google Docs" button
+const blob = new Blob([htmlWithInlineStyles], { type: 'text/html' });
+const item = new ClipboardItem({ 'text/html': blob });
+await navigator.clipboard.write([item]);
+```
+
+#### Table Styling Specification
+
+**DECISION-017: Bake Google Docs table styling into HTML output**
+
+Target output matches user's manual formatting:
+
+| Property | Value | CSS |
+|----------|-------|-----|
+| Header background | Light blue | `background-color: #c9daf8` |
+| All borders | 0.5pt solid black | `border: solid #000000 0.5pt` |
+| Column widths | Equal distribution | `width: {100/cols}%` |
+| Header semantics | `<thead>` + `<th>` | Proper HTML structure |
+
+**Pinned header:** Dropped from scope. This is a Google Docs table property (right-click → Table properties), not controllable via HTML. User accepts 1-click manual pin vs 4-action loop.
+
+#### Proposed UI
+
+```
+┌──────────────────────────────────────────────┐
+│  [HTML → Markdown]  [Markdown → HTML]        │  ← Mode toggle
+├──────────────────────────────────────────────┤
+│  Paste your Markdown here...                 │
+│  ┌────────────────────────────────────────┐  │
+│  │ | Header | Header |                    │  │
+│  │ |--------|--------|                    │  │
+│  │ | Cell   | Cell   |                    │  │
+│  └────────────────────────────────────────┘  │
+├──────────────────────────────────────────────┤
+│  Preview: (rendered with styling)            │
+│  ┌────────────────────────────────────────┐  │
+│  │ Blue header, bordered table preview    │  │
+│  └────────────────────────────────────────┘  │
+│                                              │
+│  [📋 Copy for Google Docs]                   │
+└──────────────────────────────────────────────┘
+```
+
+#### Implementation Plan
+
+| Step | Task | Complexity |
+|------|------|------------|
+| 1 | Add mode toggle UI (HTML→MD / MD→HTML) | Low |
+| 2 | Integrate markdown parser (likely marked.js) | Low |
+| 3 | Create table styling transformer | Medium |
+| 4 | Implement Clipboard API HTML write | Low |
+| 5 | Add preview with inline styles | Low |
+| 6 | Test across browsers + Google Docs | Medium |
+
+#### Scope Boundaries
+
+**In scope:**
+- MD → HTML conversion
+- Opinionated table styling (blue header, borders, equal widths)
+- Clipboard API for HTML copy
+- Preview with rendered styles
+
+**Out of scope (for now):**
+- Pinned header automation (not possible via HTML)
+- Custom style themes (hardcoded to user's preferred style)
+- Language-specific code block highlighting
+
+---
+
+📦 STATELESS HANDOFF
+
+**Layer 1 — Local Context:**
+→ Last action: LOG-028 (Vision + decisions for bidirectional MD → HTML feature)
+→ Dependency chain: LOG-028 (standalone new feature)
+→ Next action: Design detailed UI mockup and select markdown parser library
+
+**Layer 2 — Global Context:**
+→ Architecture: Vite build system, modular `src/platforms/` structure, Turndown.js for HTML→MD
+→ Patterns: Preview tabs pattern (LOG-020), client-side clipboard operations
+
+**Fork paths:**
+- Continue to implementation → Start with mode toggle UI and parser integration
+- Discuss further → Refine table styling, explore other formatting options

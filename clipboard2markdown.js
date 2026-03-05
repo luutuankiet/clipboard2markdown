@@ -1,5 +1,9 @@
 import mermaid from 'mermaid';
+import { marked } from 'marked';
 import { convert } from './src/converter.js';
+
+// Configure marked for GFM (tables, etc.)
+marked.setOptions({ gfm: true });
 
 // ===========================================
 // UI HELPERS
@@ -317,6 +321,9 @@ document.addEventListener('DOMContentLoaded', function () {
   var togglePreviewBtn = document.querySelector('#toggle-preview-btn');
   var toggleInputBtn = document.querySelector('#toggle-input-btn');
   var copyStatus = document.querySelector('#copy-status');
+  var copyGdocsBtn = document.querySelector('#copy-gdocs-btn');
+  var modeToggle = document.querySelector('#mode-toggle');
+  var modeBtns = Array.from(document.querySelectorAll('.mode-btn'));
 
   var previewPanel = document.querySelector('#preview-panel');
   var previewFrame = document.querySelector('#preview-input-frame');
@@ -331,9 +338,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
   var lastPastedHtml = '';
   var lastMarkdown = '';
+  var lastConvertedHtml = '';  // For MD → HTML mode
   var previewMode = false;
   var inputCollapsed = false;
   var activePreviewView = 'input';
+  var currentMode = 'html-to-md';  // 'html-to-md' or 'md-to-html'
 
   var setStatus = function (message, isError) {
     copyStatus.textContent = message;
@@ -357,6 +366,145 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!collapsed && !skipFocus) {
       pastebin.focus();
     }
+  };
+
+  var setMode = function (mode) {
+    currentMode = mode;
+    modeBtns.forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+
+    // Update UI based on mode
+    var isHtmlToMd = mode === 'html-to-md';
+    copyHtmlBtn.classList.toggle('hidden', !isHtmlToMd);
+    copyMdBtn.classList.toggle('hidden', !isHtmlToMd);
+    copyGdocsBtn.classList.toggle('hidden', isHtmlToMd);
+
+    // Update placeholder text
+    pastebin.setAttribute('data-placeholder', 
+      isHtmlToMd 
+        ? 'Tap here, then paste your copied content' 
+        : 'Tap here, then paste your Markdown text'
+    );
+
+    // Clear state when switching modes
+    pastebin.innerHTML = '';
+    output.value = '';
+    lastPastedHtml = '';
+    lastMarkdown = '';
+    lastConvertedHtml = '';
+    setInputCollapsed(false, { skipFocus: true });
+    setPreviewMode(false, { skipFocus: true });
+  };
+
+  var applyGoogleDocsTableStyles = function (html) {
+    // Parse HTML and add inline styles for Google Docs compatibility
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(html, 'text/html');
+    
+    doc.querySelectorAll('table').forEach(function (table) {
+      table.style.borderCollapse = 'collapse';
+      table.style.width = '100%';
+      
+      doc.querySelectorAll('th').forEach(function (th) {
+        th.style.backgroundColor = '#c9daf8';
+        th.style.border = 'solid #000000 0.5pt';
+        th.style.padding = '6px 8px';
+        // No fixed width — let content determine column size
+      });
+      
+      doc.querySelectorAll('td').forEach(function (td) {
+        td.style.border = 'solid #000000 0.5pt';
+        td.style.padding = '6px 8px';
+        // No fixed width — let content determine column size
+      });
+    });
+    
+    return doc.body.innerHTML;
+  };
+
+  var preserveWhitespaceAfterBr = function (html) {
+    // Convert spaces after <br> to &nbsp; to preserve indentation
+    return html.replace(/<br\s*\/?>(\s+)/gi, function (match, spaces) {
+      return '<br>' + spaces.split('').map(function () { return '&nbsp;'; }).join('');
+    });
+  };
+
+  var escapeXmlLikeTags = function (markdown) {
+    // Escape XML-like tags that aren't standard HTML
+    // Match tags like <current_mode>, <active_task>, etc. (containing underscores or not standard HTML)
+    var standardTags = /^(a|abbr|address|area|article|aside|audio|b|base|bdi|bdo|blockquote|body|br|button|canvas|caption|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|div|dl|dt|em|embed|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hgroup|hr|html|i|iframe|img|input|ins|kbd|label|legend|li|link|main|map|mark|menu|meta|meter|nav|noscript|object|ol|optgroup|option|output|p|param|picture|pre|progress|q|rp|rt|ruby|s|samp|script|section|select|slot|small|source|span|strong|style|sub|summary|sup|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|u|ul|var|video|wbr)$/i;
+    
+    return markdown.replace(/<(\/?)(\w[\w_-]*)([^>]*)>/g, function (match, slash, tagName, rest) {
+      if (standardTags.test(tagName)) {
+        return match; // Keep standard HTML tags
+      }
+      // Escape non-standard tags
+      return '&lt;' + slash + tagName + rest + '&gt;';
+    });
+  };
+
+  var preserveNewlinesInHtml = function (html) {
+    // Convert newlines to <br> in the final HTML to preserve line structure
+    // BUT only for text nodes that have actual content (not just whitespace between tags)
+    // Skip content inside <pre>, <code>, <table>, <ol>, <ul>, <li> tags
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(html, 'text/html');
+    
+    var walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null, false);
+    var textNodes = [];
+    while (walker.nextNode()) {
+      textNodes.push(walker.currentNode);
+    }
+    
+    textNodes.forEach(function (node) {
+      // Skip if inside block-level elements where newlines are structural
+      var parent = node.parentNode;
+      while (parent && parent !== doc.body) {
+        var tag = parent.tagName;
+        if (tag === 'PRE' || tag === 'CODE' || tag === 'TABLE' || 
+            tag === 'OL' || tag === 'UL' || tag === 'LI') {
+          return;
+        }
+        parent = parent.parentNode;
+      }
+      
+      var text = node.textContent;
+      
+      // Skip whitespace-only nodes (these are formatting between tags)
+      if (/^\s*$/.test(text)) {
+        return;
+      }
+      
+      if (text.indexOf('\n') !== -1) {
+        var fragment = doc.createDocumentFragment();
+        var parts = text.split('\n');
+        parts.forEach(function (part, i) {
+          if (i > 0) {
+            fragment.appendChild(doc.createElement('br'));
+          }
+          if (part) {
+            fragment.appendChild(doc.createTextNode(part));
+          }
+        });
+        node.parentNode.replaceChild(fragment, node);
+      }
+    });
+    
+    return doc.body.innerHTML;
+  };
+
+  var convertMdToHtml = function (markdown) {
+    // 1. Escape XML-like tags before parsing
+    var escapedMd = escapeXmlLikeTags(markdown);
+    // 2. Parse markdown to HTML
+    var rawHtml = marked.parse(escapedMd);
+    // 3. Preserve newlines (convert \n to <br>)
+    var withNewlines = preserveNewlinesInHtml(rawHtml);
+    // 4. Preserve whitespace after <br> tags
+    var withPreservedSpaces = preserveWhitespaceAfterBr(withNewlines);
+    // 5. Apply Google Docs table styling
+    return applyGoogleDocsTableStyles(withPreservedSpaces);
   };
 
   var setPreviewView = function (viewName) {
@@ -502,14 +650,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
   pastebin.addEventListener('paste', function () {
     setTimeout(function () {
-      var html = pastebin.innerHTML;
-      var markdown = convert(html);
+      if (currentMode === 'html-to-md') {
+        // Original HTML → Markdown flow
+        var html = pastebin.innerHTML;
+        var markdown = convert(html);
 
-      lastPastedHtml = html;
-      lastMarkdown = markdown;
+        lastPastedHtml = html;
+        lastMarkdown = markdown;
 
-      output.value = markdown;
-      renderPreviewViews(html, markdown);
+        output.value = markdown;
+        renderPreviewViews(html, markdown);
+      } else {
+        // New Markdown → HTML flow
+        var markdownInput = pastebin.innerText || pastebin.textContent;
+        var styledHtml = convertMdToHtml(markdownInput);
+
+        lastMarkdown = markdownInput;
+        lastConvertedHtml = styledHtml;
+
+        output.value = styledHtml;
+        // For preview, show the styled HTML render
+        renderPreviewViews(styledHtml, markdownInput);
+      }
+      
       setInputCollapsed(true, { skipFocus: true });
 
       if (!previewMode) {
@@ -553,12 +716,38 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   togglePreviewBtn.addEventListener('click', function () {
-    if (!lastPastedHtml && !lastMarkdown) {
+    if (!lastPastedHtml && !lastMarkdown && !lastConvertedHtml) {
       setStatus('Paste content first to preview', true);
       return;
     }
 
     setPreviewMode(!previewMode);
+  });
+
+  copyGdocsBtn.addEventListener('click', function () {
+    if (!lastConvertedHtml) {
+      setStatus('No HTML to copy yet', true);
+      return;
+    }
+
+    // Write HTML to clipboard for Google Docs paste
+    var blob = new Blob([lastConvertedHtml], { type: 'text/html' });
+    var item = new ClipboardItem({ 'text/html': blob, 'text/plain': new Blob([lastConvertedHtml], { type: 'text/plain' }) });
+    
+    navigator.clipboard.write([item]).then(function () {
+      setStatus('Copied! Paste into Google Docs', false);
+    }).catch(function (err) {
+      setStatus('Failed to copy HTML', true);
+      console.error('Copy for Google Docs failed:', err);
+    });
+  });
+
+  modeBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (btn.dataset.mode !== currentMode) {
+        setMode(btn.dataset.mode);
+      }
+    });
   });
 
   setInputCollapsed(false, { skipFocus: true });
