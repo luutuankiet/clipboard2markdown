@@ -22,14 +22,22 @@ function readClipboard() {
 ObjC.import("AppKit");
 var pb = $.NSPasteboard.generalPasteboard;
 var types = ObjC.deepUnwrap(pb.types);
+var result;
 if (types.indexOf("public.html") !== -1) {
   var data = pb.dataForType("public.html");
-  var str = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding);
-  JSON.stringify({ type: "html", content: ObjC.unwrap(str) || "" });
-} else {
-  var plain = ObjC.unwrap(pb.stringForType("public.utf8-plain-text"));
-  JSON.stringify({ type: "text", content: plain || "" });
+  if (!data.isNil()) {
+    var str = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding);
+    var content = !str.isNil() ? ObjC.unwrap(str) : "";
+    if (content && content.trim().length > 0) {
+      result = { type: "html", content: content };
+    }
+  }
 }
+if (!result) {
+  var plain = ObjC.unwrap(pb.stringForType("public.utf8-plain-text"));
+  result = { type: "text", content: plain || "" };
+}
+JSON.stringify(result);
 `;
   const result = spawnSync('osascript', ['-l', 'JavaScript', '-e', script], {
     encoding: 'utf8',
@@ -67,6 +75,7 @@ var htmlData = str.dataUsingEncoding($.NSUTF8StringEncoding);
 var pb = $.NSPasteboard.generalPasteboard;
 pb.clearContents;
 pb.setDataForType(htmlData, "public.html");
+pb.setStringForType(str, "public.utf8-plain-text");
 `;
   try {
     const result = spawnSync('osascript', ['-l', 'JavaScript', '-e', script], { encoding: 'utf8' });
@@ -101,16 +110,22 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const clipboard = readClipboard();
     if (!clipboard.content || !clipboard.content.trim()) {
-      process.exit(1); // no convertible content
+      console.error('c2m: empty clipboard');
+      process.exit(1);
     }
     const direction = detectDirection(clipboard.type, forceToMd, forceToHtml);
     if (direction === 'to-md') {
-      writeTextToClipboard(convert(clipboard.content));
+      const md = convert(clipboard.content);
+      console.error(`c2m: ${clipboard.type} → md (${md.length} chars)`);
+      writeTextToClipboard(md);
     } else {
-      writeHtmlToClipboard(convertMdToHtml(clipboard.content));
+      const html = convertMdToHtml(clipboard.content);
+      console.error(`c2m: ${clipboard.type} → html (${html.length} chars)`);
+      writeHtmlToClipboard(html);
     }
     process.exit(0);
-  } catch {
+  } catch (e) {
+    console.error(`c2m: ${e.message}`);
     process.exit(2);
   }
 }
