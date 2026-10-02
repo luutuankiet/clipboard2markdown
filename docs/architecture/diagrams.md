@@ -89,8 +89,11 @@ instead would push the box over the ends of unbound arrows at its sides.
 rejected if the new box overlaps anything, or if growing a group to hold it
 would swallow a box that is not in that group; when every spot on the
 requested side is rejected, the other sides are tried and the substitution is
-reported on stderr. Boxes are placed 120px apart so a labelled arrow between
-them stays visible.
+reported on stderr. If the group is hemmed in on every side, the box goes just
+outside the outermost enclosing group instead (no longer a member, also
+reported); only when even that fails is it placed on top of something, with a
+warning. Boxes are placed 120px apart so a labelled arrow between them stays
+visible.
 
 Images do not survive an edit; see `docs/traps/EDITED_LINK_LOSES_IMAGES.md`.
 

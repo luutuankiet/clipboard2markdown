@@ -87,6 +87,31 @@ describe('editLink', () => {
     expect(overlap).toBe(false);
   });
 
+  it('add next to a node in a hemmed-in group places it outside the group, on nothing', async () => {
+    // The key sits right of the group; a labelled banner above and a labelled
+    // strip just below close the other sides, so the group cannot grow anywhere.
+    const original = readScene('11-legend');
+    const labelled = (id, x, y, width, height) => {
+      const shape = { ...original.elements.find((e) => e.id === 'later'), id, x, y, width, height, boundElements: [{ type: 'text', id: id + '_label' }] };
+      const label = { ...original.elements.find((e) => e.id === 'later_label'), id: id + '_label', x: x + 10, y: y + 10, containerId: id };
+      original.elements.push(shape, label);
+    };
+    labelled('banner', -200, -160, 1100, 60);
+    labelled('strip', -200, 230, 720, 50);
+    const backend = createFakeBackend();
+    const url = await saveScene(original, { fetch: backend.fetch });
+    const result = await editLink(url, [{ op: 'add', id: 'audit', label: 'Audit log', near: 'stock', side: 'right' }], { fetch: backend.fetch });
+    const after = await loadScene(result.url, { fetch: backend.fetch });
+    expect(result.report.join('\n')).toMatch(/no room inside zone for audit; placed \w+ of zone, outside it/);
+    expectUntouched(original, after, []);
+    const box = after.elements.find((e) => e.id === 'audit');
+    after.elements.filter((e) => e.id !== 'audit' && !e.isDeleted && e.type !== 'text' && e.containerId == null).forEach((o) => {
+      const hit = box.x < o.x + o.width && o.x < box.x + box.width && box.y < o.y + o.height && o.y < box.y + box.height;
+      expect(hit, o.id).toBe(false);
+    });
+    expect(parseMermaid(sceneToMermaid(after).text).members).not.toContain('audit in zone');
+  });
+
   it('connect draws a bound, labelled, dashed arrow', async () => {
     const { mermaid, after, original } = await run('01-bound-arrows', [{ op: 'connect', from: 'ledger', to: 'gateway', label: 'replays', dashed: true }]);
     expect(mermaid.edges).toContain('ledger -.-> gateway : replays');

@@ -254,8 +254,7 @@ function opAdd(scene, model, op) {
   var w = Math.max(a.width, Math.ceil((size.width + 2 * TEXT_METRICS.padding) * f));
   var h = Math.max(a.height, Math.ceil((size.height + 2 * TEXT_METRICS.padding) * f));
 
-  var ab = bounds(a);
-  var start = function (sd) {
+  var start = function (sd, ab) {
     return {
       right: [ab.x + ab.w + DEFAULT_GAP, ab.y + ab.h / 2 - h / 2],
       left: [ab.x - DEFAULT_GAP - w, ab.y + ab.h / 2 - h / 2],
@@ -265,52 +264,70 @@ function opAdd(scene, model, op) {
   };
   var stepFor = function (sd) { return sd === 'right' || sd === 'left' ? [0, h + DEFAULT_GAP / 2] : [w + DEFAULT_GAP / 2, 0]; };
 
-  var ancestorIds = new Set(ancestors(model, anchor).map(function (g) { return g.el.id; }));
-  var obstacles = scene.elements.filter(function (el) {
-    return !el.isDeleted && el.type !== 'arrow' && !(el.type === 'line') && !el.containerId && !ancestorIds.has(el.id);
-  }).map(bounds);
-  // Growing an enclosing group must not swallow a box that is not in it.
   var groupChain = ancestors(model, anchor);
+  var ancestorIds = new Set(groupChain.map(function (g) { return g.el.id; }));
+  var obstaclesFor = function (skip) {
+    return scene.elements.filter(function (el) {
+      return !el.isDeleted && el.type !== 'arrow' && !(el.type === 'line') && !el.containerId && !skip.has(el.id);
+    }).map(bounds);
+  };
+  // Growing an enclosing group must not swallow a box that is not in it.
   var outsiders = groupChain.map(function (g) {
     return Array.from(model.nodes.values()).concat(Array.from(model.groups.values())).filter(function (o) {
       return o !== g && groupChain.indexOf(o) < 0 && !isInside(model, o, g);
     }).map(function (o) { return bounds(o.el); });
   });
-  var blocked = function (b) {
-    if (obstacles.some(function (o) { return overlaps(b, o, 16); })) return true;
-    return groupChain.some(function (g, i) {
-      var grown = grownBounds(bounds(g.el), b);
-      return outsiders[i].some(function (o) { return overlaps(grown, o, 0) && !overlaps(bounds(g.el), o, 0); });
-    });
+  var blockedBy = function (obstacles, chain) {
+    return function (b) {
+      if (obstacles.some(function (o) { return overlaps(b, o, 16); })) return true;
+      return chain.some(function (g, i) {
+        var grown = grownBounds(bounds(g.el), b);
+        return outsiders[i].some(function (o) { return overlaps(grown, o, 0) && !overlaps(bounds(g.el), o, 0); });
+      });
+    };
   };
   // Requested side first; if every slot there is blocked, the other sides.
-  var place = function (sd) {
-    var p = start(sd), st = stepFor(sd);
-    var b = { x: p[0], y: p[1], w: w, h: h };
-    for (var tries = 0; tries < 12; tries++) {
-      if (!blocked(b)) return b;
-      b = { x: b.x + st[0], y: b.y + st[1], w: w, h: h };
+  var search = function (ab, blocked) {
+    var sides = [side].concat(['right', 'below', 'left', 'above'].filter(function (sd) { return sd !== side; }));
+    for (var si = 0; si < sides.length; si++) {
+      var p = start(sides[si], ab), st = stepFor(sides[si]);
+      var b = { x: p[0], y: p[1], w: w, h: h };
+      for (var tries = 0; tries < 12; tries++) {
+        if (!blocked(b)) return { box: b, side: sides[si] };
+        b = { x: b.x + st[0], y: b.y + st[1], w: w, h: h };
+      }
     }
     return null;
   };
-  var sides = [side].concat(['right', 'below', 'left', 'above'].filter(function (sd) { return sd !== side; }));
-  var box = null, usedSide = side;
-  for (var si = 0; si < sides.length && !box; si++) { box = place(sides[si]); usedSide = sides[si]; }
+  var found = search(bounds(a), blockedBy(obstaclesFor(ancestorIds), groupChain));
   var note = null;
-  if (!box) {
-    var p0 = start(side);
+  if (found && found.side !== side) note = side + ' of ' + op.near + ' was blocked; placed ' + found.side + ' instead';
+  // A group hemmed in on every side cannot grow: place the node just outside
+  // the outermost group rather than on top of whatever surrounds it.
+  if (!found && groupChain.length) {
+    var outer = groupChain[groupChain.length - 1];
+    found = search(bounds(outer.el), blockedBy(obstaclesFor(new Set()), []));
+    if (found) {
+      note = 'no room inside ' + outer.id + ' for ' + op.id + '; placed ' + found.side + ' of ' + outer.id + ', outside it';
+      groupChain = [];
+      outside = true;
+    }
+  }
+  var box, outside = false;
+  if (found) {
+    box = found.box;
+  } else {
+    var p0 = start(side, bounds(a));
     box = { x: p0[0], y: p0[1], w: w, h: h };
     note = 'no free spot next to ' + op.near + '; placed ' + side + ' anyway, it may overlap';
-  } else if (usedSide !== side) {
-    note = side + ' of ' + op.near + ' was blocked; placed ' + usedSide + ' instead';
   }
 
   var shape = Object.assign({}, a, {
-    id: op.id, x: box.x, y: box.y, width: w, height: h, groupIds: [], boundElements: [],
+    id: op.id, x: box.x, y: box.y, width: w, height: h, groupIds: [], boundElements: [], frameId: outside ? null : a.frameId || null,
     seed: randomInt(), version: 1, versionNonce: randomInt(), updated: Date.now(), isDeleted: false, link: null, locked: false,
   });
   delete shape.index;
-  var text = newText(anchorText, { containerId: op.id, frameId: a.frameId || null });
+  var text = newText(anchorText, { containerId: op.id, frameId: outside ? null : a.frameId || null });
   setText(text, op.label);
   shape.boundElements = [{ type: 'text', id: text.id }];
   scene.elements.push(shape, text);
