@@ -1,0 +1,23 @@
+flowchart TB
+  subgraph zone [Shop zone]
+    till[Till]
+    stock[Stock table]
+  end
+  feeder[Supplier feed]
+  sync[Sync job]
+  later[Later idea]
+  till --> stock
+  feeder --> till
+  sync -.-> stock
+  %% legend: key_table = Table
+  classDef key_table fill:#a5d8ff
+  class till,stock,later key_table
+  %% legend: key_source = Source
+  classDef key_source fill:#e9ecef
+  class feeder key_source
+  %% legend: key_job = Job
+  classDef key_job fill:#e9ecef
+  class sync key_job
+  %% legend: key_zone = Zone
+  classDef key_zone fill:none
+  class zone key_zone

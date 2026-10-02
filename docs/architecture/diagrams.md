@@ -52,6 +52,14 @@ it, so the ids an agent reads are the ids the editor resolves.
    polyline, each text claimed once by its nearest arrow.
 6. Leftover text becomes `%% note:`, unmatched arrows `%% unconnected arrow`,
    images `%% image`.
+7. A *colour key* (`findLegend`) is two or more labelled boxes that no arrow
+   touches, outside every subgraph and clear of the connected diagram, within
+   `legendGap` of each other, each in its own fill/line style, each style also
+   used in the diagram. Key boxes are not drawn; each entry becomes
+   `%% legend: key_<label> = <label>`, a `classDef` with its fill colour, and a
+   `class` line tagging every other box or subgraph in that style. Hatching
+   cannot be drawn in Mermaid, so two entries with the same colour differ only
+   by name.
 
 The output is an outline (`%% outline (needs agent): <reason>`) instead of a
 flowchart when fewer than `flowchartMinResolvedRatio` of arrows resolve, when

@@ -17,6 +17,8 @@ export const TUNING = {
   edgeLabelDistance: 36,
   // Fewer than this share of arrows resolved -> outline instead of flowchart.
   flowchartMinResolvedRatio: 0.75,
+  // Colour-key boxes sit at most this far from their neighbour in the key.
+  legendGap: 80,
   // A shape counts as containing another when it encloses it within this slack.
   containmentSlack: 2,
 };
@@ -154,6 +156,67 @@ function textOf(el) {
 export function isEdgeElement(el) {
   if (el.type === 'arrow') return true;
   return el.type === 'line' && !!(el.startArrowhead || el.endArrowhead);
+}
+
+// Fill and line style, the things a colour key distinguishes. A transparent
+// box's fill pattern is invisible, so it does not count.
+export function styleKey(el) {
+  var bg = el.backgroundColor || 'transparent';
+  return bg + '|' + (bg === 'transparent' ? '' : el.fillStyle || 'solid') + '|' + (el.strokeStyle || 'solid');
+}
+
+// A colour key: two or more labelled boxes that no arrow touches, outside every
+// group and clear of the connected diagram, stacked close together, each in its
+// own style, and each style worn by something in the diagram. Anything less
+// certain stays an ordinary box.
+// Every other box or group wearing a key style is tagged with it, including
+// free-standing ones away from the key.
+function findLegend(nodes, groups, edges) {
+  var none = { items: [], ids: new Set() };
+  var touched = new Set();
+  edges.forEach(function (e) { touched.add(e.from); touched.add(e.to); });
+  var candidates = [], diagram = [];
+  nodes.forEach(function (n) { (n.parent || touched.has(n.el.id) ? diagram : candidates).push(n); });
+  groups.forEach(function (g) { diagram.push(g); });
+  if (candidates.length < 2 || !diagram.length) return none;
+
+  var area = diagram.map(function (d) { return bounds(d.el); }).reduce(function (a, b) {
+    var x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+    return { x: x, y: y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
+  });
+  var gap = function (a, b) {
+    var p = bounds(a.el), q = bounds(b.el);
+    return Math.max(p.x - (q.x + q.w), q.x - (p.x + p.w), p.y - (q.y + q.h), q.y - (p.y + p.h), 0);
+  };
+  var clustered = function (list) {
+    return list.filter(function (c) { return list.some(function (o) { return o !== c && gap(c, o) <= TUNING.legendGap; }); });
+  };
+  // Cluster first, so a stray box elsewhere that shares a key style does not
+  // knock that entry out of the key.
+  var kept = clustered(candidates.filter(function (c) {
+    var b = bounds(c.el);
+    return b.x > area.x + area.w || b.x + b.w < area.x || b.y > area.y + area.h || b.y + b.h < area.y;
+  }));
+  var styleCount = new Map();
+  kept.forEach(function (c) { styleCount.set(styleKey(c.el), (styleCount.get(styleKey(c.el)) || 0) + 1); });
+  kept = clustered(kept.filter(function (c) {
+    var k = styleKey(c.el);
+    return styleCount.get(k) === 1 && diagram.some(function (d) { return styleKey(d.el) === k; });
+  }));
+  if (kept.length < 2) return none;
+
+  var order = function (a, b) { return a.el.y - b.el.y || a.el.x - b.el.x; };
+  var others = diagram.concat(candidates.filter(function (c) { return kept.indexOf(c) < 0; }));
+  return {
+    items: kept.sort(order).map(function (c) {
+      var k = styleKey(c.el);
+      return {
+        node: c,
+        members: others.filter(function (d) { return styleKey(d.el) === k; }),
+      };
+    }),
+    ids: new Set(kept.map(function (c) { return c.el.id; })),
+  };
 }
 
 export function analyzeScene(scene) {
@@ -358,6 +421,8 @@ export function analyzeScene(scene) {
     return n ? n.id : null;
   };
 
+  var legend = findLegend(nodes, groups, edges.concat(unresolved));
+
   var byMermaidId = new Map();
   nodes.forEach(function (n) { byMermaidId.set(n.id, n); });
   groups.forEach(function (g) { byMermaidId.set(g.id, g); });
@@ -380,6 +445,7 @@ export function analyzeScene(scene) {
     byId: byId,
     byMermaidId: byMermaidId,
     mermaidId: mermaidId,
+    legend: legend,
     edgeCount: rawEdges.length,
     signals: { lifelines: lifelines.length, dividedNodes: dividedNodes.length },
     textOf: textOf,

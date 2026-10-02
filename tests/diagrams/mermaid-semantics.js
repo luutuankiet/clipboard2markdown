@@ -1,6 +1,6 @@
 // Parses the Mermaid this repo generates into sets, so tests compare meaning:
 // nodes (id, label, shape), edges (from, to, label, style), subgraph membership,
-// notes and comments. Ordering and whitespace never fail a test.
+// notes, comments and colour-key classes. Ordering and whitespace never fail a test.
 
 function unquote(s) {
   s = s.trim();
@@ -9,7 +9,7 @@ function unquote(s) {
 }
 
 export function parseMermaid(text) {
-  const out = { kind: 'flowchart', direction: null, nodes: [], edges: [], members: [], subgraphs: [], comments: [], outline: [] };
+  const out = { kind: 'flowchart', direction: null, nodes: [], edges: [], members: [], subgraphs: [], comments: [], outline: [], classDefs: [], classes: [] };
   const stack = [];
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   for (const line of lines) {
@@ -29,6 +29,8 @@ export function parseMermaid(text) {
       continue;
     }
     if (line === 'end') { stack.pop(); continue; }
+    if ((m = /^classDef (\S+) (\S+)$/.exec(line))) { out.classDefs.push(`${m[1]} ${m[2]}`); continue; }
+    if ((m = /^class (\S+) (\S+)$/.exec(line))) { m[1].split(',').forEach((id) => out.classes.push(`${id} ${m[2]}`)); continue; }
     if ((m = /^(\S+) (<-->|<-\.->|-\.->|-\.-|-->|---)(?:\|(.*)\|)? (\S+)$/.exec(line))) {
       out.edges.push(`${m[1]} ${m[2]} ${m[4]}${m[3] ? ' : ' + unquote(m[3]) : ''}`);
       continue;
@@ -41,6 +43,6 @@ export function parseMermaid(text) {
     }
     throw new Error('unparsed Mermaid line: ' + line);
   }
-  for (const k of ['nodes', 'edges', 'members', 'subgraphs', 'comments', 'outline']) out[k].sort();
+  for (const k of ['nodes', 'edges', 'members', 'subgraphs', 'comments', 'outline', 'classDefs', 'classes']) out[k].sort();
   return out;
 }

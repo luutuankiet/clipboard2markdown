@@ -188,3 +188,29 @@ const write = (name, els) => fs.writeFileSync(path.join(dir, name + '.excalidraw
   e.push(base('image', 'shot', 260, 80, 200, 150, { fileId: 'file-synthetic-1', status: 'saved', scale: [1, 1] }));
   write('10-image', e);
 }
+
+// 11. a colour key beside the diagram: boxes no arrow touches, one per style,
+// each style also worn by something in the diagram. A stray box far from the
+// key shares a key style: it stays a box, tagged like the rest.
+{
+  const e = [];
+  const paint = (id, bg, fill) => Object.assign(e.find((x) => x.id === id), { backgroundColor: bg, fillStyle: fill || 'solid' });
+  e.push(base('rectangle', 'zone', 0, 0, 520, 200));
+  e.push(text('zone_title', 20, 10, 'Shop zone'));
+  box(e, 'rectangle', 'till', 30, 80, 180, 70, 'Till');
+  box(e, 'rectangle', 'stock', 310, 80, 180, 70, 'Stock table');
+  box(e, 'rectangle', 'feeder', 30, 320, 180, 70, 'Supplier feed');
+  box(e, 'rectangle', 'sync', 310, 320, 180, 70, 'Sync job');
+  arrow(e, 'k1', 215, 115, 305, 115, { from: 'till', to: 'stock' });
+  arrow(e, 'k2', 120, 315, 120, 155, { from: 'feeder', to: 'till' });
+  arrow(e, 'k3', 400, 315, 400, 155, { from: 'sync', to: 'stock', style: 'dashed' });
+  paint('till', '#a5d8ff'); paint('stock', '#a5d8ff'); paint('feeder', '#e9ecef'); paint('sync', '#e9ecef', 'hachure');
+  box(e, 'rectangle', 'key_table', 700, 0, 160, 50, 'Table');
+  box(e, 'rectangle', 'key_source', 700, 80, 160, 50, 'Source');
+  box(e, 'rectangle', 'key_job', 700, 160, 160, 50, 'Job');
+  looseBox(e, 'rectangle', 'key_zone', 700, 240, 160, 80, 'Zone');
+  paint('key_table', '#a5d8ff'); paint('key_source', '#e9ecef'); paint('key_job', '#e9ecef', 'hachure');
+  box(e, 'rectangle', 'later', 0, 700, 180, 70, 'Later idea');
+  paint('later', '#a5d8ff');
+  write('11-legend', e);
+}

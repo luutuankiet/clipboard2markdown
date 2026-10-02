@@ -41,7 +41,9 @@ function edgeLine(model, e) {
 }
 
 export function flowDirection(model) {
-  var cs = Array.from(model.nodes.values()).map(function (n) { return center(n.el); });
+  var cs = Array.from(model.nodes.values()).filter(function (n) {
+    return !model.legend || !model.legend.ids.has(n.el.id);
+  }).map(function (n) { return center(n.el); });
   if (cs.length < 2) return 'TB';
   var xs = cs.map(function (c) { return c[0]; }), ys = cs.map(function (c) { return c[1]; });
   var spreadX = Math.max.apply(null, xs) - Math.min.apply(null, xs);
@@ -66,6 +68,30 @@ function commentLines(model) {
     out.push('%% image: embedded picture, contents not readable' + (inside ? ' (inside ' + inside.id + ')' : ''));
   });
   return out;
+}
+
+// The canvas's colour key, as Mermaid classes: each box in the diagram is
+// tagged with the key entry whose style it wears, and the key boxes themselves
+// are not drawn.
+function legendClasses(model) {
+  var used = new Set();
+  return model.legend.items.map(function (item, i) {
+    var slug = oneLine(item.node.label.text).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20);
+    var name = 'key_' + (slug || String(i + 1));
+    while (used.has(name)) name += '_';
+    used.add(name);
+    var bg = item.node.el.backgroundColor;
+    return {
+      name: name,
+      label: oneLine(item.node.label.text),
+      fill: bg && bg !== 'transparent' ? bg : 'none',
+      members: item.members.map(function (m) { return m.id; }),
+    };
+  });
+}
+
+function legendComment(k) {
+  return '%% legend: ' + k.name + ' = ' + k.label;
 }
 
 function outlineReason(model) {
@@ -94,7 +120,7 @@ export function sceneToMermaid(scene, options) {
   if (reason) {
     lines.push('%% outline (needs agent): ' + reason);
     lines.push('%% labels:');
-    model.nodes.forEach(function (n) { lines.push('%%   ' + n.id + ': ' + oneLine(n.label.text)); });
+    model.nodes.forEach(function (n) { if (!model.legend.ids.has(n.el.id)) lines.push('%%   ' + n.id + ': ' + oneLine(n.label.text)); });
     model.groups.forEach(function (g) { if (g.label.text) lines.push('%%   ' + g.id + ' (group): ' + oneLine(g.label.text)); });
     if (model.edges.length) {
       lines.push('%% connections:');
@@ -102,6 +128,7 @@ export function sceneToMermaid(scene, options) {
         lines.push('%%   ' + model.mermaidId(e.from) + ' ' + edgeArrow(e) + ' ' + model.mermaidId(e.to) + (e.label && e.label.text ? ': ' + oneLine(e.label.text) : ''));
       });
     }
+    legendClasses(model).forEach(function (k) { lines.push(legendComment(k) + ': ' + k.members.join(', ')); });
     commentLines(model).forEach(function (l) { lines.push(l); });
     return { text: lines.join('\n'), kind: 'outline', warnings: warnings.concat(['outline: ' + reason]) };
   }
@@ -111,7 +138,7 @@ export function sceneToMermaid(scene, options) {
   var childrenOf = function (parentId) {
     var kids = [];
     model.groups.forEach(function (g) { if (g.parent === parentId) kids.push(g); });
-    model.nodes.forEach(function (n) { if (n.parent === parentId) kids.push(n); });
+    model.nodes.forEach(function (n) { if (n.parent === parentId && !model.legend.ids.has(n.el.id)) kids.push(n); });
     return kids.sort(function (a, b) { return model.order.get(a.el.id) - model.order.get(b.el.id); });
   };
   model.order = new Map((scene.elements || []).map(function (el, i) { return [el.id, i]; }));
@@ -130,6 +157,11 @@ export function sceneToMermaid(scene, options) {
   emit(null, '  ');
 
   model.edges.forEach(function (e) { lines.push('  ' + edgeLine(model, e)); });
+  legendClasses(model).forEach(function (k) {
+    lines.push('  ' + legendComment(k));
+    lines.push('  classDef ' + k.name + ' fill:' + k.fill);
+    if (k.members.length) lines.push('  class ' + k.members.join(',') + ' ' + k.name);
+  });
   commentLines(model).forEach(function (l) { lines.push('  ' + l); });
 
   return { text: lines.join('\n'), kind: 'flowchart', warnings: warnings };
