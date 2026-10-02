@@ -5,7 +5,8 @@
   "type": "module",
   "main": "clipboard2markdown.js",
   "bin": {
-    "c2m": "./bin/cli.js"
+    "c2m": "./bin/cli.js",
+    "c2m-diagrams": "./bin/diagrams.js"
   },
   "directories": {
     "lib": "lib",

@@ -1,14 +1,22 @@
 # clipboard2markdown
 
 Bidirectional clipboard converter: HTML-to-Markdown (Turndown) and
-Markdown-to-HTML (Marked). Runs 100% client-side as a web app and as a
-macOS CLI for Alfred integration. Fork of euangoddard/clipboard2markdown with
-platform-specific rules for Jira, Confluence, Slack, Google Docs/Sheets/Chat.
+Markdown-to-HTML (Marked). Runs client-side as a web app and as a
+macOS CLI for Alfred integration. A third mode and a second CLI turn
+excalidraw.com share links into Mermaid and edit canvases by link. Fork of
+euangoddard/clipboard2markdown with platform-specific rules for Jira,
+Confluence, Slack, Google Docs/Sheets/Chat.
 
 ## Hard constraints
 
-- **Client-side only.** No server, no API, no data leaves the browser or the
-  local machine. This is a trust property the README promises users.
+- **Client-side only; pasted content never leaves.** No server of our own, and
+  nothing the user pastes is ever sent anywhere. The HTML -> MD and MD -> HTML
+  modes make no network requests at all. The single exception is the
+  MD -> MD (diagrams) mode: read-only `GET`s to the Excalidraw backend named in
+  each pasted share link, loaded lazily so other modes never pull that code.
+  Uploading exists only in `bin/diagrams.js`. See
+  `docs/adr/0002-diagrams-mode-network-reads.md`. This is a
+  trust property the README promises users.
 - **Platform rules are additive.** Each platform module exports `rules` and a
   `sanitizer`; new platforms never modify existing ones. Register in
   `src/platforms/index.js`.
@@ -22,10 +30,12 @@ platform-specific rules for Jira, Confluence, Slack, Google Docs/Sheets/Chat.
 
 ```
 bin/cli.js                  CLI entry point (Alfred workflow)
+bin/diagrams.js             Diagram CLI for agents: expand, strip, show, edit
 clipboard2markdown.js       Web UI controller (paste events, preview, copy)
 index.html                  Web app shell
 src/converter.js            HTML-to-MD pipeline (Turndown + post-processing)
 src/md-to-html.js           MD-to-HTML pipeline (Marked + Google Docs styling)
+src/diagrams/               Excalidraw share links <-> Mermaid, shared by page and CLI
 src/platforms/              Platform-specific sanitizers and Turndown rules
   index.js                  Aggregator -- imports all platforms
   jira.js                   Jira rules and sanitizer
@@ -41,6 +51,9 @@ tests/                      Fixture-based regression suite
   cli.test.js               CLI unit tests (detectDirection)
   fixtures/                 Per-platform HTML/MD fixture pairs
   fixtures-md-to-html/      MD/HTML fixture pairs for reverse direction
+  diagrams/                 Diagram tests: scene fixtures, Markdown, edit, CLI
+  fixtures-diagrams/        Synthetic .excalidraw scenes + expected .mmd
+  fixtures-diagram-md/      <name>.input.md / <name>.expected.md pairs
 docs/                       Project documentation
 scripts/gen-docs-index.sh   Regenerates docs/README.md index
 ```
@@ -50,7 +63,7 @@ scripts/gen-docs-index.sh   Regenerates docs/README.md index
 ```bash
 npm run dev                # Vite dev server with HMR
 npm run build              # Production build to dist/
-npm test                   # vitest -- fixture-based regression suite (32 tests)
+npm test                   # vitest -- fixture-based regression suite
 scripts/gen-docs-index.sh  # Regenerate documentation index
 ```
 

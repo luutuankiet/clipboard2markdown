@@ -24,9 +24,31 @@ Workflow platforms don't let you copy as Markdown — you get rich text. But you
 
 - **🔄 Turndown.js Engine** — Robust GFM support (tables, task lists, strikethrough)
 - **🧹 Platform Sanitizers** — Pre-process quirky HTML before conversion
-- **🔒 100% Client-Side** — No data leaves your browser
+- **🔒 Client-Side** — Nothing you paste leaves your browser. The one exception to *any* network traffic is the diagrams mode (below), which downloads the Excalidraw scenes your pasted links point to, read-only
+- **🧭 Diagram round trip** — Turn excalidraw.com share links into Mermaid that agents can read, and let agents edit a canvas by link (see below)
 - **🧪 Automated Testing** — Fixture-based regression suite prevents breakage
 - **⚡ Vite Build System** — Hot reload dev server, optimized production builds
+
+## Diagrams: Excalidraw links ⇄ Mermaid
+
+For documents whose diagrams live as excalidraw.com share links (a screenshot plus the link, as in a Google Doc).
+
+**Page: MD → MD (diagrams).** Paste Markdown; under each share link a fenced Mermaid *reading copy* of the canvas is inserted between `<!-- excalidraw-mermaid:begin <id> -->` / `end` markers. The rest of the text is unchanged byte-for-byte. Re-pasting replaces blocks rather than duplicating them, and **Strip diagram blocks** removes them all before you promote the document again.
+
+Privacy: this mode sends one read-only `GET` per link to `json.excalidraw.com` (the backend named by the link) and decrypts the scene in your browser with the key in the link's `#` fragment. Nothing you paste is sent. The HTML → MD and MD → HTML modes make no network requests at all.
+
+**CLI for agents** (`bin/diagrams.js`, Node 20+, any OS):
+
+```bash
+node bin/diagrams.js expand doc.md [--write]      # same output as the page
+node bin/diagrams.js strip doc.md [--write]
+node bin/diagrams.js show '<share url>'           # or a local .excalidraw file
+node bin/diagrams.js edit '<share url>' --ops '[{"op":"rename","node":"auth","label":"Identity"}]'
+```
+
+`edit` patches the existing canvas (rename, add, connect, disconnect, relabel-edge, remove), keeps every untouched element exactly as it was, uploads the result and prints exactly one new share link. The old link keeps working. Node ids are the ones `show` prints. Uploading exists only in the CLI.
+
+The Mermaid is deliberately lossy: positions, colours, fonts and arrow curves are dropped; boxes, labels, connections, line style and grouping are kept. The canvas stays the master copy.
 
 ## Demo
 

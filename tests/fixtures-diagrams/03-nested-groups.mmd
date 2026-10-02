@@ -1,0 +1,13 @@
+%% generated from local scene; reading copy, edits here do not change the canvas
+flowchart LR
+  client[Client app]
+  subgraph platform [Platform]
+    store[Event store]
+    subgraph ingest [Ingest]
+      reader[Feed reader]
+      parser[Parser]
+    end
+  end
+  client -->|pushes| platform
+  reader --> parser
+  parser --> store

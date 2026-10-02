@@ -1,0 +1,7 @@
+%% generated from local scene; reading copy, edits here do not change the canvas
+flowchart TB
+  intake[Intake form]
+  triage[Triage queue]
+  archive[Archive]
+  intake -->|submits| triage
+  triage -->|after 30 days| archive

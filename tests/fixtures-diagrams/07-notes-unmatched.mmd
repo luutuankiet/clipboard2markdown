@@ -1,0 +1,11 @@
+%% generated from local scene; reading copy, edits here do not change the canvas
+flowchart TB
+  cache[Cache]
+  origin[Origin]
+  edge1[Edge node]
+  logs[Access logs]
+  cache --> origin
+  origin --> edge1
+  edge1 -.-> logs
+  %% note: TODO confirm TTL with ops
+  %% unconnected arrow "evicts": cache --> ?

@@ -208,6 +208,12 @@ var renderMarkdownPreview = function (markdown) {
       continue;
     }
 
+    // Diagram block markers are HTML comments: invisible in rendered Markdown.
+    if (/^<!-- excalidraw-mermaid:(begin|end) \S+ -->$/.test(trimmed)) {
+      i += 1;
+      continue;
+    }
+
     if (/^```/.test(trimmed)) {
       var fenceMatch = trimmed.match(/^```\s*([a-zA-Z0-9_-]+)?/);
       var fenceLanguage = fenceMatch && fenceMatch[1] ? fenceMatch[1].toLowerCase() : '';
@@ -319,6 +325,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var toggleInputBtn = document.querySelector('#toggle-input-btn');
   var copyStatus = document.querySelector('#copy-status');
   var copyGdocsBtn = document.querySelector('#copy-gdocs-btn');
+  var stripDiagramsBtn = document.querySelector('#strip-diagrams-btn');
   var modeToggle = document.querySelector('#mode-toggle');
   var modeBtns = Array.from(document.querySelectorAll('.mode-btn'));
 
@@ -339,12 +346,13 @@ document.addEventListener('DOMContentLoaded', function () {
   var previewMode = false;
   var inputCollapsed = false;
   var activePreviewView = 'input';
-  var currentMode = 'html-to-md';  // 'html-to-md' or 'md-to-html'
+  var currentMode = 'html-to-md';  // 'html-to-md', 'md-to-html' or 'md-diagrams'
+  var diagramRun = 0;
 
-  var setStatus = function (message, isError) {
+  var setStatus = function (message, isError, sticky) {
     copyStatus.textContent = message;
     copyStatus.style.color = isError ? '#b42318' : '';
-    if (message) {
+    if (message && !sticky) {
       setTimeout(function () {
         if (copyStatus.textContent === message) {
           copyStatus.textContent = '';
@@ -367,6 +375,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   var infoHtmlToMd = document.querySelector('#info-html-to-md');
   var infoMdToHtml = document.querySelector('#info-md-to-html');
+  var infoMdDiagrams = document.querySelector('#info-md-diagrams');
 
   var setMode = function (mode) {
     currentMode = mode;
@@ -376,13 +385,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Update UI based on mode
     var isHtmlToMd = mode === 'html-to-md';
+    var isDiagrams = mode === 'md-diagrams';
+    var isMdToHtml = mode === 'md-to-html';
     copyHtmlBtn.classList.toggle('hidden', !isHtmlToMd);
-    copyMdBtn.classList.toggle('hidden', !isHtmlToMd);
-    copyGdocsBtn.classList.toggle('hidden', isHtmlToMd);
+    copyMdBtn.classList.toggle('hidden', isMdToHtml);
+    copyGdocsBtn.classList.toggle('hidden', !isMdToHtml);
+    stripDiagramsBtn.classList.toggle('hidden', !isDiagrams);
 
     // Toggle info sections
     if (infoHtmlToMd) infoHtmlToMd.classList.toggle('hidden', !isHtmlToMd);
-    if (infoMdToHtml) infoMdToHtml.classList.toggle('hidden', isHtmlToMd);
+    if (infoMdToHtml) infoMdToHtml.classList.toggle('hidden', !isMdToHtml);
+    if (infoMdDiagrams) infoMdDiagrams.classList.toggle('hidden', !isDiagrams);
 
     // Update placeholder text
     pastebin.setAttribute('data-placeholder', 
@@ -390,6 +403,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ? 'Tap here, then paste your copied content' 
         : 'Tap here, then paste your Markdown text'
     );
+    diagramRun += 1;
 
     // Clear state when switching modes
     pastebin.innerHTML = '';
@@ -544,7 +558,64 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  pastebin.addEventListener('paste', function () {
+  // MD -> MD (diagrams): the only mode that touches the network, and only with
+  // read-only GETs to the backend named in each pasted excalidraw.com link. The
+  // diagram module is loaded on first use, so other modes never load it.
+  var expandDiagramsInto = function (markdown, html) {
+    var run = ++diagramRun;
+    var report = {};
+    lastPastedHtml = html || '';
+    lastMarkdown = markdown;
+    output.value = markdown;
+    setStatus('Looking for diagram links…', false, true);
+
+    import('./src/diagrams/browser.js').then(function (diagrams) {
+      return diagrams.expandDiagramLinks(markdown, {
+        loadScene: function (url) { return diagrams.loadScene(url); },
+        onProgress: function (p) {
+          if (run === diagramRun && p.total) {
+            setStatus('Expanding ' + Math.min(p.done + 1, p.total) + ' of ' + p.total + ' diagrams…', false, true);
+          }
+        },
+        report: report
+      });
+    }).then(function (expanded) {
+      if (run !== diagramRun) return;
+      var r = report;
+      lastMarkdown = expanded;
+      output.value = expanded;
+      renderPreviewViews(lastPastedHtml, expanded);
+      if (!r.total) {
+        setStatus('No excalidraw.com links found', false, true);
+      } else {
+        setStatus('Expanded ' + (r.total - r.failed) + ' of ' + r.total + ' diagrams' +
+          (r.failed ? ' (' + r.failed + ' failed, see output)' : ''), r.failed > 0, true);
+      }
+    }).catch(function (err) {
+      if (run !== diagramRun) return;
+      setStatus('Diagram expansion failed: ' + (err && err.message ? err.message : err), true, true);
+      console.error('Diagram expansion failed:', err);
+    });
+  };
+
+  pastebin.addEventListener('paste', function (event) {
+    if (currentMode === 'md-diagrams') {
+      var data = event.clipboardData;
+      var plain = data ? data.getData('text/plain') : '';
+      var html = data ? data.getData('text/html') : '';
+      // Markdown copies carry the link in the plain text; a rich copy carries it
+      // only in the HTML, which goes through the HTML -> MD pipeline first.
+      var usePlain = plain && (!html || /excalidraw\.com\/?#json=/.test(plain));
+      if (!plain && !html) return;
+      event.preventDefault();
+      var markdown = usePlain ? plain : convert(html);
+      pastebin.textContent = markdown;
+      setInputCollapsed(true, { skipFocus: true });
+      renderPreviewViews(html, markdown);
+      expandDiagramsInto(markdown, html);
+      return;
+    }
+
     setTimeout(function () {
       if (currentMode === 'html-to-md') {
         // Original HTML → Markdown flow
@@ -618,6 +689,22 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     setPreviewMode(!previewMode);
+  });
+
+  stripDiagramsBtn.addEventListener('click', function () {
+    if (!output.value) {
+      setStatus('Nothing to strip yet', true);
+      return;
+    }
+    diagramRun += 1;
+    import('./src/diagrams/browser.js').then(function (m) {
+      var before = output.value;
+      var stripped = m.stripDiagramBlocks(before);
+      lastMarkdown = stripped;
+      output.value = stripped;
+      renderPreviewViews(lastPastedHtml, stripped);
+      setStatus(before === stripped ? 'No diagram blocks to strip' : 'Stripped diagram blocks', false);
+    });
   });
 
   copyGdocsBtn.addEventListener('click', function () {

@@ -23,6 +23,7 @@ something is implemented.
 |---|---|---|
 | [Clipboard I/O](../../../docs/architecture/clipboard-io.md) | how the web app and CLI read and write the system clipboard | 2026-09-16 |
 | [Conversion pipeline](../../../docs/architecture/conversion-pipeline.md) | how content is converted between HTML and Markdown, the two directions | 2026-09-16 |
+| [Diagram round trip](../../../docs/architecture/diagrams.md) | how excalidraw.com share links become Mermaid, how the diagrams mode and bin/diagrams.js work, and how a canvas is edited by link | 2026-10-02 |
 
 <!-- END GENERATED INDEX -->
 

@@ -41,6 +41,7 @@ Why the repo is the way it is. A merged decision is immutable -- supersede
 it with a new one rather than editing it.
 
 - [JXA for CLI clipboard I/O instead of pbcopy/pbpaste](../../../docs/adr/0001-jxa-clipboard-io.md)
+- [The diagrams mode makes read-only requests to the Excalidraw backend](../../../docs/adr/0002-diagrams-mode-network-reads.md)
 
 <!-- END GENERATED INDEX -->
 
