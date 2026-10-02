@@ -120,8 +120,9 @@ export async function main(argv, io) {
     var source = parseShareLink(target) ? target : (await readSource(target, fetchImpl)).scene;
     var edited = await editLink(source, ops, { fetch: fetchImpl, upload: !args['no-upload'] });
     if (edited.scene.elements.some(function (el) { return el.type === 'image' && !el.isDeleted; })) {
-      stderr.write('warning: embedded images do not carry over to a new share link; they will show as broken until re-inserted\n');
+      stderr.write('warning: embedded images do not carry over to a new share link; excalidraw.com will show placeholders until they are re-inserted (docs/traps/EDITED_LINK_LOSES_IMAGES.md)\n');
     }
+    edited.report.forEach(function (line) { stderr.write(line + '\n'); });
     if (args.out) fs.writeFileSync(args.out, JSON.stringify(edited.scene, null, 2) + '\n');
     if (args['show-mermaid']) stderr.write(edited.mermaid + '\n');
     stdout.write((args['no-upload'] ? edited.mermaid : edited.url) + '\n');

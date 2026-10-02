@@ -27,8 +27,10 @@ crashing.
 
 | symptom | page | area | verified |
 |---|---|---|---|
+| A canvas edited by link shows grey image placeholders where pictures used to be | [EDITED_LINK_LOSES_IMAGES](traps/EDITED_LINK_LOSES_IMAGES.md) | diagrams (bin/diagrams.js edit) | 2026-10-02 |
 | CLI says it converted but Cmd+V pastes nothing into the target app | [MISSING_PLAIN_TEXT_FALLBACK](traps/MISSING_PLAIN_TEXT_FALLBACK.md) | clipboard I/O | 2026-09-16 |
 | CLI prints nothing and exits, clipboard unchanged, after copying from VS Code or TickTick | [NIL_HTML_CLIPBOARD_TYPE](traps/NIL_HTML_CLIPBOARD_TYPE.md) | clipboard I/O | 2026-09-16 |
+| A scripted paste into the page does nothing in Firefox; the handler sees empty clipboard data | [SYNTHETIC_PASTE_EMPTY_IN_FIREFOX](traps/SYNTHETIC_PASTE_EMPTY_IN_FIREFOX.md) | live testing (browser automation) | 2026-10-02 |
 
 ## Reference
 

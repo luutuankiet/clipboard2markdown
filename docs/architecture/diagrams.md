@@ -25,7 +25,8 @@ and the CLI; its only dependencies are `fetch`, WebCrypto and `pako`.
 | `src/diagrams/markdown.js` | ~26 | `stripDiagramBlocks` |
 | | ~60-85 | `hostBlock`: where a block goes (after paragraph, list item, table) |
 | | ~118 | `expandDiagramLinks`: strip, then insert fresh blocks |
-| `src/diagrams/edit.js` | ~396 | `applyEdits` (pure, on a deep copy), `editLink` |
+| `src/diagrams/edit.js` | ~61 | `wrapLabel`: bound text wraps to the box width; the box grows in height |
+| | ~469 | `applyEdits` (pure, on a deep copy), `editLink` |
 | `src/diagrams/browser.js` | all | the read-only subset the page imports |
 | `bin/diagrams.js` | all | CLI: `expand`, `strip`, `show`, `edit` |
 | `clipboard2markdown.js` | ~564-625 | page mode: paste handling and progress |
@@ -71,9 +72,19 @@ Ops: `rename`, `add`, `connect`, `disconnect`, `relabel-edge`, `remove`.
 `applyEdits` deep-copies the scene, re-runs `analyzeScene` before every op and
 throws on the first bad one, so nothing is uploaded unless every op applied.
 Text size is estimated at `0.68 x fontSize` per character and
-`1.25 x fontSize` per line (`TEXT_METRICS`), and containers grow around their
-centre to fit. `add` copies the anchor's look, steps past overlaps, and grows
-every enclosing group box.
+`1.25 x fontSize` per line (`TEXT_METRICS`). Bound labels wrap to the box's
+width and the box grows in height, as Excalidraw itself does; growing the width
+instead would push the box over the ends of unbound arrows at its sides.
+`originalText` keeps the unwrapped label, which is what the reader prints.
+
+`add` copies the anchor's look and grows every enclosing group box. A spot is
+rejected if the new box overlaps anything, or if growing a group to hold it
+would swallow a box that is not in that group; when every spot on the
+requested side is rejected, the other sides are tried and the substitution is
+reported on stderr. Boxes are placed 120px apart so a labelled arrow between
+them stays visible.
+
+Images do not survive an edit; see `docs/traps/EDITED_LINK_LOSES_IMAGES.md`.
 
 ## Testing
 

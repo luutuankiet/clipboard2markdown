@@ -12,7 +12,8 @@ import { loadScene, saveScene, parseShareLink, normalizeScene } from './share-li
 // Text size estimate for Excalidraw's default hand-drawn font. Errs wide so new
 // or renamed labels do not clip.
 export const TEXT_METRICS = { charWidth: 0.68, lineHeight: 1.25, padding: 10 };
-const DEFAULT_GAP = 80;
+// Room between boxes for a labelled arrow to stay visible.
+const DEFAULT_GAP = 120;
 const GROUP_PADDING = 24;
 
 const OP_FIELDS = {
@@ -54,9 +55,32 @@ function containerFactor(type) {
   return 1;
 }
 
+// Word-wrap to the container's width, as Excalidraw does for bound text: the
+// box keeps its width (so arrow ends at its sides stay outside it) and grows in
+// height. A single word longer than a line still widens the box.
+export function wrapLabel(label, fontSize, containerWidth, type) {
+  var avail = containerWidth / containerFactor(type) - 2 * TEXT_METRICS.padding;
+  var maxChars = Math.max(1, Math.floor(avail / (TEXT_METRICS.charWidth * fontSize)));
+  return String(label).split('\n').map(function (para) {
+    var lines = [];
+    var line = '';
+    para.split(/\s+/).filter(Boolean).forEach(function (word) {
+      if (!line) line = word;
+      else if ((line + ' ' + word).length <= maxChars) line += ' ' + word;
+      else { lines.push(line); line = word; }
+    });
+    lines.push(line);
+    return lines.join('\n');
+  }).join('\n');
+}
+
 // Size the text element to its content and centre it in its container,
 // growing the container (around its centre) when the text would not fit.
+// `originalText` keeps the unwrapped label; that is what the reader prints.
 function fitBoundText(textEl, container) {
+  if (container && container.type !== 'arrow') {
+    textEl.text = wrapLabel(textEl.originalText != null ? textEl.originalText : textEl.text, textEl.fontSize || 20, container.width, container.type);
+  }
   var size = measureText(textEl.text, textEl.fontSize || 20);
   textEl.width = size.width;
   textEl.height = size.height;
@@ -225,27 +249,60 @@ function opAdd(scene, model, op) {
   var a = anchor.el;
   var anchorText = anchor.label.els[0];
   var fontSize = (anchorText && anchorText.fontSize) || 20;
-  var size = measureText(op.label, fontSize);
+  var size = measureText(wrapLabel(op.label, fontSize, a.width, a.type), fontSize);
   var f = containerFactor(a.type);
   var w = Math.max(a.width, Math.ceil((size.width + 2 * TEXT_METRICS.padding) * f));
   var h = Math.max(a.height, Math.ceil((size.height + 2 * TEXT_METRICS.padding) * f));
 
   var ab = bounds(a);
-  var pos = {
-    right: [ab.x + ab.w + DEFAULT_GAP, ab.y + ab.h / 2 - h / 2],
-    left: [ab.x - DEFAULT_GAP - w, ab.y + ab.h / 2 - h / 2],
-    below: [ab.x + ab.w / 2 - w / 2, ab.y + ab.h + DEFAULT_GAP],
-    above: [ab.x + ab.w / 2 - w / 2, ab.y - DEFAULT_GAP - h],
-  }[side];
-  var step = side === 'right' || side === 'left' ? [0, h + DEFAULT_GAP / 2] : [w + DEFAULT_GAP / 2, 0];
+  var start = function (sd) {
+    return {
+      right: [ab.x + ab.w + DEFAULT_GAP, ab.y + ab.h / 2 - h / 2],
+      left: [ab.x - DEFAULT_GAP - w, ab.y + ab.h / 2 - h / 2],
+      below: [ab.x + ab.w / 2 - w / 2, ab.y + ab.h + DEFAULT_GAP],
+      above: [ab.x + ab.w / 2 - w / 2, ab.y - DEFAULT_GAP - h],
+    }[sd];
+  };
+  var stepFor = function (sd) { return sd === 'right' || sd === 'left' ? [0, h + DEFAULT_GAP / 2] : [w + DEFAULT_GAP / 2, 0]; };
 
   var ancestorIds = new Set(ancestors(model, anchor).map(function (g) { return g.el.id; }));
   var obstacles = scene.elements.filter(function (el) {
     return !el.isDeleted && el.type !== 'arrow' && !(el.type === 'line') && !el.containerId && !ancestorIds.has(el.id);
   }).map(bounds);
-  var box = { x: pos[0], y: pos[1], w: w, h: h };
-  for (var tries = 0; tries < 50 && obstacles.some(function (o) { return overlaps(box, o, 16); }); tries++) {
-    box = { x: box.x + step[0], y: box.y + step[1], w: w, h: h };
+  // Growing an enclosing group must not swallow a box that is not in it.
+  var groupChain = ancestors(model, anchor);
+  var outsiders = groupChain.map(function (g) {
+    return Array.from(model.nodes.values()).concat(Array.from(model.groups.values())).filter(function (o) {
+      return o !== g && groupChain.indexOf(o) < 0 && !isInside(model, o, g);
+    }).map(function (o) { return bounds(o.el); });
+  });
+  var blocked = function (b) {
+    if (obstacles.some(function (o) { return overlaps(b, o, 16); })) return true;
+    return groupChain.some(function (g, i) {
+      var grown = grownBounds(bounds(g.el), b);
+      return outsiders[i].some(function (o) { return overlaps(grown, o, 0) && !overlaps(bounds(g.el), o, 0); });
+    });
+  };
+  // Requested side first; if every slot there is blocked, the other sides.
+  var place = function (sd) {
+    var p = start(sd), st = stepFor(sd);
+    var b = { x: p[0], y: p[1], w: w, h: h };
+    for (var tries = 0; tries < 12; tries++) {
+      if (!blocked(b)) return b;
+      b = { x: b.x + st[0], y: b.y + st[1], w: w, h: h };
+    }
+    return null;
+  };
+  var sides = [side].concat(['right', 'below', 'left', 'above'].filter(function (sd) { return sd !== side; }));
+  var box = null, usedSide = side;
+  for (var si = 0; si < sides.length && !box; si++) { box = place(sides[si]); usedSide = sides[si]; }
+  var note = null;
+  if (!box) {
+    var p0 = start(side);
+    box = { x: p0[0], y: p0[1], w: w, h: h };
+    note = 'no free spot next to ' + op.near + '; placed ' + side + ' anyway, it may overlap';
+  } else if (usedSide !== side) {
+    note = side + ' of ' + op.near + ' was blocked; placed ' + usedSide + ' instead';
   }
 
   var shape = Object.assign({}, a, {
@@ -259,17 +316,33 @@ function opAdd(scene, model, op) {
   scene.elements.push(shape, text);
   fitBoundText(text, shape);
 
-  // Grow every enclosing group box so the new node stays inside it.
-  ancestors(model, anchor).forEach(function (g) {
-    var gb = bounds(g.el), nb = bounds(shape);
-    var x1 = Math.min(gb.x, nb.x - GROUP_PADDING), y1 = Math.min(gb.y, nb.y - GROUP_PADDING);
-    var x2 = Math.max(gb.x + gb.w, nb.x + nb.w + GROUP_PADDING), y2 = Math.max(gb.y + gb.h, nb.y + nb.h + GROUP_PADDING);
-    if (x1 !== gb.x || y1 !== gb.y || x2 !== gb.x + gb.w || y2 !== gb.y + gb.h) {
-      g.el.x = x1; g.el.y = y1; g.el.width = x2 - x1; g.el.height = y2 - y1;
+  // Grow every enclosing group box, innermost first, so the new node stays inside.
+  var inner = bounds(shape);
+  groupChain.forEach(function (g) {
+    var gb = bounds(g.el);
+    var grown = grownBounds(gb, inner);
+    if (grown.x !== gb.x || grown.y !== gb.y || grown.w !== gb.w || grown.h !== gb.h) {
+      g.el.x = grown.x; g.el.y = grown.y; g.el.width = grown.w; g.el.height = grown.h;
       touch(g.el);
-      nb = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
     }
+    inner = grown;
   });
+  return note;
+}
+
+function grownBounds(gb, nb) {
+  var x1 = Math.min(gb.x, nb.x - GROUP_PADDING), y1 = Math.min(gb.y, nb.y - GROUP_PADDING);
+  var x2 = Math.max(gb.x + gb.w, nb.x + nb.w + GROUP_PADDING), y2 = Math.max(gb.y + gb.h, nb.y + nb.h + GROUP_PADDING);
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+
+function isInside(model, item, group) {
+  var p = item.parent;
+  while (p) {
+    if (p === group.el.id) return true;
+    p = model.groups.has(p) ? model.groups.get(p).parent : null;
+  }
+  return false;
 }
 
 // Point where the ray from a box centre towards `toward` leaves the box.
@@ -400,12 +473,13 @@ export function applyEdits(scene, ops) {
   var report = [];
   ops.forEach(function (op, i) {
     var model = analyzeScene(working);
+    var note;
     try {
-      OPS[op.op](working, model, op);
+      note = OPS[op.op](working, model, op);
     } catch (err) {
       throw new Error('op ' + i + ' (' + op.op + '): ' + err.message);
     }
-    report.push(op.op + ' ok');
+    report.push('op ' + i + ' (' + op.op + ') ok' + (note ? ': ' + note : ''));
   });
   return { scene: working, report: report };
 }

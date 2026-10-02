@@ -37,14 +37,21 @@ describe('editLink', () => {
     expect(await loadScene(url, { fetch: backend.fetch })).toEqual({ ...original, files: {} });
   });
 
-  it('rename keeps styling and grows the box to fit', async () => {
+  it('rename keeps styling, wraps to the box width and grows its height', async () => {
     const label = 'Identity and access management service';
     const { mermaid, after, original } = await run('01-bound-arrows', [{ op: 'rename', node: 'auth', label }]);
     expect(mermaid.nodes).toContain(`auth|${label}|rect`);
     const box = after.elements.find((e) => e.id === 'auth');
     const text = after.elements.find((e) => e.id === 'auth_label');
-    expect(text.width).toBeGreaterThanOrEqual(label.length * 0.68 * 20);
-    expect(box.width).toBeGreaterThanOrEqual(text.width);
+    const before = original.elements.find((e) => e.id === 'auth');
+    // Width is kept so arrow ends at the box's sides stay outside it.
+    expect(box.width).toBe(before.width);
+    expect(box.height).toBeGreaterThan(before.height);
+    expect(text.originalText).toBe(label);
+    const longest = Math.max(...text.text.split('\n').map((l) => l.length));
+    expect(text.width).toBeGreaterThanOrEqual(longest * 0.68 * 20);
+    expect(text.y).toBeGreaterThanOrEqual(box.y);
+    expect(text.y + text.height).toBeLessThanOrEqual(box.y + box.height);
     expect(text.x).toBeGreaterThanOrEqual(box.x);
     expect(text.x + text.width).toBeLessThanOrEqual(box.x + box.width);
     expect(box.strokeColor).toBe(original.elements.find((e) => e.id === 'auth').strokeColor);
@@ -69,6 +76,15 @@ describe('editLink', () => {
     const grown = after.elements.find((e) => e.id === 'ingest');
     expect(grown.width).toBeGreaterThan(before.width);
     expectUntouched(original, after, ['ingest', 'platform']);
+  });
+
+  it('add never grows a group over a box that is not in it', async () => {
+    const { after } = await run('03-nested-groups', [{ op: 'add', id: 'dedupe', label: 'Deduplicator', near: 'parser', side: 'below' }]);
+    const ingest = after.elements.find((e) => e.id === 'ingest');
+    const store = after.elements.find((e) => e.id === 'store');
+    const overlap = ingest.x < store.x + store.width && store.x < ingest.x + ingest.width &&
+      ingest.y < store.y + store.height && store.y < ingest.y + ingest.height;
+    expect(overlap).toBe(false);
   });
 
   it('connect draws a bound, labelled, dashed arrow', async () => {
