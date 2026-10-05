@@ -105,7 +105,7 @@ WARNINGS
 
 NOT SUPPORTED
   images, frames, freedraw, Mermaid as input, editing an existing link (use
-  c2m-diagrams edit for that), writing .excalidraw files.
+  c2m diagrams edit for that), writing .excalidraw files.
 `;
 
 function readInput(target, stdin) {

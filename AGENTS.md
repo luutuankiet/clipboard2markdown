@@ -29,8 +29,8 @@ Confluence, Slack, Google Docs/Sheets/Chat.
 ## Directory layout
 
 ```
-bin/cli.js                  CLI entry point (Alfred workflow)
-bin/diagrams.js             Diagram CLI for agents: expand, strip, show, edit
+bin/cli.js                  The one CLI (`clipboard2markdown`, alias `c2m`): clipboard, excalidraw, diagrams
+bin/diagrams.js             `c2m diagrams`: expand, strip, show, edit
 bin/excalidraw.js           `c2m excalidraw`: JSON skeleton -> new share link
 clipboard2markdown.js       Web UI controller (paste events, preview, copy)
 index.html                  Web app shell

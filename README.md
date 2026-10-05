@@ -37,13 +37,13 @@ For documents whose diagrams live as excalidraw.com share links (a screenshot pl
 
 Privacy: this mode sends one read-only `GET` per link to `json.excalidraw.com` (the backend named by the link) and decrypts the scene in your browser with the key in the link's `#` fragment. Nothing you paste is sent. The HTML → MD and MD → HTML modes make no network requests at all.
 
-**CLI for agents** (`bin/diagrams.js`, Node 20+, any OS):
+**CLI for agents** (`c2m diagrams`, Node 20+, any OS):
 
 ```bash
-node bin/diagrams.js expand doc.md [--write]      # same output as the page
-node bin/diagrams.js strip doc.md [--write]
-node bin/diagrams.js show '<share url>'           # or a local .excalidraw file
-node bin/diagrams.js edit '<share url>' --ops '[{"op":"rename","node":"auth","label":"Identity"}]'
+c2m diagrams expand doc.md [--write]      # same output as the page
+c2m diagrams strip doc.md [--write]
+c2m diagrams show '<share url>'           # or a local .excalidraw file
+c2m diagrams edit '<share url>' --ops '[{"op":"rename","node":"auth","label":"Identity"}]'
 ```
 
 `edit` patches the existing canvas (rename, add, connect, disconnect, relabel-edge, remove), keeps every untouched element exactly as it was, uploads the result and prints exactly one new share link. The old link keeps working. Node ids are the ones `show` prints. Uploading exists only in the CLI.
@@ -66,14 +66,22 @@ The Mermaid is deliberately lossy: positions, colours, fonts and arrow curves ar
 
 ## Command Line
 
-The same converters ship as the `c2m` CLI:
+Everything ships as one command, `clipboard2markdown`, also installed under the short name `c2m`. Run it without installing:
+
+```bash
+npx -y @luutuankiet/clipboard2markdown --help
+npx -y @luutuankiet/clipboard2markdown excalidraw diagram.json
+npx -y @luutuankiet/clipboard2markdown diagrams show '<share url>'
+```
+
+or install it once:
 
 ```bash
 npm install -g @luutuankiet/clipboard2markdown
 c2m --help
 ```
 
-`c2m` reads the clipboard, converts it (HTML to Markdown, or Markdown to HTML), and writes the result back. Clipboard conversion needs macOS. `c2m excalidraw` and `c2m-diagrams` run anywhere Node 20+ runs.
+With no subcommand, `c2m` reads the clipboard, converts it (HTML to Markdown, or Markdown to HTML), and writes the result back. Clipboard conversion needs macOS. `c2m excalidraw` and `c2m diagrams` run anywhere Node 20+ runs. `c2m-diagrams` still works as an alias of `c2m diagrams`.
 
 ## Development
 

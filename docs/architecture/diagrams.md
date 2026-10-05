@@ -1,7 +1,7 @@
 ---
 title: Diagram round trip
 covers: how excalidraw.com share links become Mermaid, how the diagrams mode and bin/diagrams.js work, and how a canvas is edited by link
-verified: 2026-10-02
+verified: 2026-10-05
 ---
 
 # Diagram round trip
@@ -29,7 +29,7 @@ and the CLI; its only dependencies are `fetch`, WebCrypto and `pako`.
 | | ~469 | `applyEdits` (pure, on a deep copy), `editLink` |
 | `src/diagrams/browser.js` | all | the read-only subset the page imports |
 | `src/diagrams/skeleton.js` | all | `buildSkeleton`: short JSON diagram -> full scene, preview, lint warnings (pure) |
-| `bin/diagrams.js` | all | CLI: `expand`, `strip`, `show`, `edit` |
+| `bin/diagrams.js` | all | `c2m diagrams` (alias `c2m-diagrams`): `expand`, `strip`, `show`, `edit` |
 | `bin/excalidraw.js` | all | `c2m excalidraw`: skeleton -> upload -> link; its help text is the agent manual |
 | `clipboard2markdown.js` | ~564-625 | page mode: paste handling and progress |
 | | ~694 | Strip diagram blocks button |

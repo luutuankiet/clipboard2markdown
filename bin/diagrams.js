@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// c2m-diagrams: Excalidraw share links <-> Mermaid, for agents.
+// c2m diagrams: Excalidraw share links <-> Mermaid, for agents. Reached through
+// bin/cli.js (`c2m diagrams ...`) and, for older installs, as `c2m-diagrams`.
 // Runs anywhere Node 20+ runs; no clipboard, no browser.
 //
 // stdout carries only the primary result (Markdown, Mermaid or the new link);
@@ -13,7 +14,7 @@ import {
   parseShareLink, normalizeScene,
 } from '../src/diagrams/index.js';
 
-const USAGE = `usage: c2m-diagrams <command> [options]
+const USAGE = `usage: c2m diagrams <command> [options]
 
   expand <file.md> [--write]     add a Mermaid reading copy under every excalidraw.com link
   strip <file.md> [--write]      remove every generated block

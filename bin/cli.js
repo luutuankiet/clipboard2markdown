@@ -5,7 +5,8 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
-const HELP = `c2m - convert the clipboard between rich HTML and Markdown
+const HELP = `clipboard2markdown (short name: c2m) - clipboard HTML <-> Markdown,
+and Excalidraw diagrams for agents
 
 Usage:
   c2m              HTML on the clipboard -> Markdown, plain text -> HTML
@@ -15,9 +16,15 @@ Usage:
   c2m --version    print the version
 
   c2m excalidraw <file|->   JSON diagram -> excalidraw.com share link and
-                            Mermaid preview (any OS; see c2m excalidraw --help)
+                            Mermaid preview (see c2m excalidraw --help)
+  c2m diagrams <command>    existing share links <-> Mermaid: expand, strip,
+                            show, edit (see c2m diagrams --help)
 
-Clipboard conversion needs macOS (it uses osascript).
+Every command also runs without installing:
+  npx -y @luutuankiet/clipboard2markdown excalidraw diagram.json
+
+Clipboard conversion needs macOS (it uses osascript); excalidraw and
+diagrams run anywhere Node 20+ runs.
 Exit codes: 0 converted, 1 empty clipboard, 2 conversion failed.
 `;
 
@@ -142,6 +149,15 @@ if (isEntryPoint()) {
   if (args[0] === 'excalidraw') {
     const { runExcalidraw } = await import('./excalidraw.js');
     process.exit(await runExcalidraw(args.slice(1), { stdout: process.stdout, stderr: process.stderr }));
+  }
+  if (args[0] === 'diagrams') {
+    const { main } = await import('./diagrams.js');
+    try {
+      process.exit(await main(args.slice(1), { stdout: process.stdout, stderr: process.stderr }));
+    } catch (err) {
+      process.stderr.write('error: ' + (err && err.message ? err.message : err) + '\n');
+      process.exit(1);
+    }
   }
 
   if (args.includes('--help') || args.includes('-h')) {

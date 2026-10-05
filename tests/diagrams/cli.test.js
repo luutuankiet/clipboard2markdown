@@ -96,6 +96,6 @@ describe('c2m-diagrams CLI', () => {
   it('unknown commands exit non-zero with usage', () => {
     const r = run(['frobnicate', 'x']);
     expect(r.status).toBe(1);
-    expect(r.stderr).toContain('usage: c2m-diagrams');
+    expect(r.stderr).toContain('usage: c2m diagrams');
   });
 });
