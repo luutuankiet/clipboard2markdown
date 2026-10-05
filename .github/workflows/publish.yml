@@ -1,0 +1,101 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+      - name: Verify package contents
+        run: npm pack --dry-run
+      - name: Smoke test the installed CLI
+        run: |
+          npm pack
+          npm install -g ./luutuankiet-clipboard2markdown-*.tgz
+          c2m --help
+          c2m --version
+
+  release:
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify release notes file exists
+        run: |
+          NOTES_FILE="releases/${{ github.ref_name }}.md"
+          if [ ! -f "$NOTES_FILE" ]; then
+            echo "::error::Missing $NOTES_FILE. Every tag needs a hand-written narrative entry."
+            echo "::error::See releases/README.md for the authoring pattern."
+            exit 1
+          fi
+          echo "Found $NOTES_FILE ($(wc -l < $NOTES_FILE) lines)"
+
+      - name: Create GitHub Release from narrative notes file
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file "releases/${{ github.ref_name }}.md"
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # NOTE: no registry-url — it injects NODE_AUTH_TOKEN placeholder
+          # which poisons OIDC auth (actions/setup-node#1440)
+      - name: Install dependencies
+        run: npm ci
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          CURRENT=$(node -p "require('./package.json').version")
+          if [ "$VERSION" != "$CURRENT" ]; then
+            npm version "$VERSION" --no-git-tag-version
+          fi
+      - name: Determine npm dist-tag
+        id: dist-tag
+        run: |
+          TAG="${GITHUB_REF_NAME:-manual}"
+          if [[ "$TAG" =~ -dev\. ]]; then
+            echo "tag=dev" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" =~ -(rc|beta|alpha)\. ]]; then
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish to npm (OIDC provenance)
+        # npm install -g npm@latest breaks on Node 22.22.2 (MODULE_NOT_FOUND promise-retry)
+        # npx runs latest npm without corrupting the global install
+        run: npx -y npm@latest publish --access public --provenance --tag ${{ steps.dist-tag.outputs.tag }}
