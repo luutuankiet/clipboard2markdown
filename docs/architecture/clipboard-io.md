@@ -1,7 +1,7 @@
 ---
 title: Clipboard I/O
 covers: how the web app and CLI read and write the system clipboard
-verified: 2026-09-16
+verified: 2026-10-05
 ---
 
 # Clipboard I/O
@@ -28,7 +28,7 @@ plain text from the clipboard.
 `bin/cli.js` reads and writes the clipboard directly via JXA (`osascript -l
 JavaScript`) calling AppKit's `NSPasteboard` API.
 
-**Reading** (`readClipboard`, line ~20): checks the pasteboard types array for
+**Reading** (`readClipboard`, line ~60): checks the pasteboard types array for
 `public.html`. If present AND the data is non-nil and non-empty, returns
 `{ type: "html", content }`. Otherwise falls back to `public.utf8-plain-text`
 and returns `{ type: "text", content }`.
@@ -37,17 +37,20 @@ The nil-check fallback is critical. Some apps (VS Code, TickTick) register
 `public.html` as an available type but leave the data nil. Without the fallback,
 the CLI reads empty content and silently exits.
 
-**Writing HTML** (`writeHtmlToClipboard`, line ~68): writes the HTML string to a
+**Writing HTML** (`writeHtmlToClipboard`, line ~108): writes the HTML string to a
 temp file, then uses JXA to read it and write to the pasteboard as both
 `public.html` and `public.utf8-plain-text`. Both types must be set -- writing
 only `public.html` causes Cmd+V to produce nothing in most apps.
 
-**Writing text** (`writeTextToClipboard`, line ~50): same temp-file pattern,
+**Writing text** (`writeTextToClipboard`, line ~90): same temp-file pattern,
 writes only `public.utf8-plain-text`.
 
 ## Direction detection
 
-`detectDirection(clipboardType, forceToMd, forceToHtml)` at line ~97:
+`detectDirection(clipboardType, forceToMd, forceToHtml)` in
+`src/clipboard-convert.js` (re-exported from `bin/cli.js`). `convertClipboard`
+there does the conversion and the diagrams step; `bin/cli.js` keeps only
+pasteboard I/O, the stdout notice line and exit codes:
 - `--to-md` flag forces HTML-to-Markdown
 - `--to-html` flag forces Markdown-to-HTML
 - Auto-detect: `public.html` with data -> `to-md`, plain text -> `to-html`

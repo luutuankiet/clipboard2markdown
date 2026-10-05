@@ -10,13 +10,17 @@ Confluence, Slack, Google Docs/Sheets/Chat.
 ## Hard constraints
 
 - **Client-side only; pasted content never leaves.** No server of our own, and
-  nothing the user pastes is ever sent anywhere. The HTML -> MD and MD -> HTML
-  modes make no network requests at all. The single exception is the
-  MD -> MD (diagrams) mode: read-only `GET`s to the Excalidraw backend named in
-  each pasted share link, loaded lazily so other modes never pull that code.
-  Uploading exists only in `bin/diagrams.js` and `bin/excalidraw.js`. See
-  `docs/adr/0002-diagrams-mode-network-reads.md`. This is a
-  trust property the README promises users.
+  nothing the user pastes is ever sent anywhere. On the page, the HTML -> MD and
+  MD -> HTML modes make no network requests at all; the single exception is the
+  MD -> MD (diagrams) mode. The CLI clipboard command, when converting rich text
+  to Markdown, also downloads the scene behind each share link unless
+  `--no-diagrams` is passed. Both send only read-only `GET`s to the Excalidraw
+  backend named in each link, never the key in its `#` fragment, and load that
+  code lazily so other paths never pull it. Uploading exists only in
+  `bin/diagrams.js` and `bin/excalidraw.js`. See
+  `docs/adr/0002-diagrams-mode-network-reads.md` and
+  `docs/adr/0003-clipboard-command-expands-diagrams.md`. This is a trust
+  property the README promises users.
 - **Platform rules are additive.** Each platform module exports `rules` and a
   `sanitizer`; new platforms never modify existing ones. Register in
   `src/platforms/index.js`.
@@ -32,6 +36,7 @@ Confluence, Slack, Google Docs/Sheets/Chat.
 bin/cli.js                  The one CLI (`clipboard2markdown`, alias `c2m`): clipboard, excalidraw, diagrams
 bin/diagrams.js             `c2m diagrams`: expand, strip, show, edit
 bin/excalidraw.js           `c2m excalidraw`: JSON skeleton -> new share link
+src/clipboard-convert.js    What the clipboard command does to content (direction, diagrams step)
 clipboard2markdown.js       Web UI controller (paste events, preview, copy)
 index.html                  Web app shell
 src/converter.js            HTML-to-MD pipeline (Turndown + post-processing)
@@ -50,6 +55,7 @@ tests/                      Fixture-based regression suite
   conversion.test.js        HTML-to-MD fixture runner
   md-to-html.test.js        MD-to-HTML fixture runner
   cli.test.js               CLI unit tests (detectDirection)
+  clipboard-convert.test.js Clipboard command: diagrams step, retries, notice line
   fixtures/                 Per-platform HTML/MD fixture pairs
   fixtures-md-to-html/      MD/HTML fixture pairs for reverse direction
   diagrams/                 Diagram tests: scene fixtures, Markdown, edit, CLI

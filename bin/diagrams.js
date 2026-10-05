@@ -13,6 +13,7 @@ import {
   expandDiagramLinks, stripDiagramBlocks, loadScene, sceneToMermaid, editLink,
   parseShareLink, normalizeScene,
 } from '../src/diagrams/index.js';
+import { retryingFetch } from '../src/diagrams/retry.js';
 
 const USAGE = `usage: c2m diagrams <command> [options]
 
@@ -30,7 +31,8 @@ ops: [{"op":"rename","node","label"}, {"op":"add","id","label","near","side"?},
 `;
 
 // Test hook: a directory standing in for json.excalidraw.com. GET reads
-// <dir>/<id>, POST writes a new file. Never set this outside tests.
+// <dir>/<id>, POST writes a new file. A file <dir>/<id>.fail holding a status
+// answers one GET with that status and is consumed. Never set this outside tests.
 function fileBackendFetch(dir) {
   return async function (url, init) {
     var method = ((init && init.method) || 'GET').toUpperCase();
@@ -48,6 +50,11 @@ function fileBackendFetch(dir) {
       return respond(200, Buffer.from(JSON.stringify({ id: id })));
     }
     var file = path.join(dir, url.split('/').pop());
+    if (fs.existsSync(file + '.fail')) {
+      var status = Number(fs.readFileSync(file + '.fail', 'utf8'));
+      fs.unlinkSync(file + '.fail');
+      return respond(status, Buffer.from('{}'));
+    }
     if (!fs.existsSync(file)) return respond(404, Buffer.from('{}'));
     return respond(200, fs.readFileSync(file));
   };
@@ -93,8 +100,10 @@ export async function main(argv, io) {
       out = stripDiagramBlocks(md);
     } else {
       var report = {};
+      var retrying = retryingFetch(fetchImpl);
       out = await expandDiagramLinks(md, {
-        loadScene: function (url) { return loadScene(url, { fetch: fetchImpl }); },
+        loadScene: function (url) { return loadScene(url, { fetch: retrying }); },
+        parallel: true,
         onProgress: function (p) { if (p.total) stderr.write('expanding ' + p.done + ' of ' + p.total + ' diagrams\n'); },
         report: report,
       });

@@ -22,9 +22,11 @@ and the CLI; its only dependencies are `fetch`, WebCrypto and `pako`.
 | | ~115-150 | id assignment: readable element ids kept, others hashed, stable per scene |
 | | ~159-end | `analyzeScene`: nodes, subgraphs, edges, labels, notes |
 | `src/diagrams/scene-to-mermaid.js` | ~84 | `sceneToMermaid`: flowchart, or a commented outline when it is not one |
-| `src/diagrams/markdown.js` | ~26 | `stripDiagramBlocks` |
+| `src/diagrams/markdown.js` | ~21-37 | `stripDiagramBlocks`: marked blocks and header-led fences |
 | | ~60-85 | `hostBlock`: where a block goes (after paragraph, list item, table) |
-| | ~118 | `expandDiagramLinks`: strip, then insert fresh blocks |
+| | ~135 | `expandDiagramLinks`: strip, then insert fresh blocks; `parallel`, `deadlineMs`, `onFailure`, `report.skipped` |
+| `src/diagrams/retry.js` | all | `retryingFetch`: per-attempt timeout, retries timeout / network / 429 / 5xx; CLI paths only |
+| `src/clipboard-convert.js` | all | `convertClipboard`: the clipboard command's diagrams step (expand on to-md, strip on to-html) |
 | `src/diagrams/edit.js` | ~61 | `wrapLabel`: bound text wraps to the box width; the box grows in height |
 | | ~469 | `applyEdits` (pure, on a deep copy), `editLink` |
 | `src/diagrams/browser.js` | all | the read-only subset the page imports |
@@ -75,6 +77,12 @@ the host block, inside a list item it is indented to the item's content. That is
 what makes `stripDiagramBlocks(expand(x)) === x` byte-for-byte. Expanding always
 strips first, so re-pasting an expanded document replaces blocks. A link is
 expanded only at its first occurrence and never inside a code fence.
+
+"Generated" means one of two things, both recognised by `stripDiagramBlocks`:
+a block between the `begin` / `end` comments, or a fence (optionally tagged
+`mermaid`) whose first line is the `%% generated from <url>; reading copy, ...`
+header. The second form is what survives a trip through rich text, which drops
+HTML comments. Any other fence is the author's and is never touched.
 
 ## Editing
 

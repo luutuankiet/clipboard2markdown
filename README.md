@@ -24,7 +24,7 @@ Workflow platforms don't let you copy as Markdown — you get rich text. But you
 
 - **🔄 Turndown.js Engine** — Robust GFM support (tables, task lists, strikethrough)
 - **🧹 Platform Sanitizers** — Pre-process quirky HTML before conversion
-- **🔒 Client-Side** — Nothing you paste leaves your browser. The one exception to *any* network traffic is the diagrams mode (below), which downloads the Excalidraw scenes your pasted links point to, read-only
+- **🔒 Client-Side** — Nothing you paste leaves your machine. The only network traffic is read-only downloads of the Excalidraw scenes your links point to: on the page in the diagrams mode, and in the `c2m` clipboard command when it converts rich text to Markdown (turn that off with `--no-diagrams`)
 - **🧭 Diagram round trip** — Turn excalidraw.com share links into Mermaid that agents can read, and let agents edit a canvas by link (see below)
 - **🧪 Automated Testing** — Fixture-based regression suite prevents breakage
 - **⚡ Vite Build System** — Hot reload dev server, optimized production builds
@@ -81,7 +81,25 @@ npm install -g @luutuankiet/clipboard2markdown
 c2m --help
 ```
 
-With no subcommand, `c2m` reads the clipboard, converts it (HTML to Markdown, or Markdown to HTML), and writes the result back. Clipboard conversion needs macOS. `c2m excalidraw` and `c2m diagrams` run anywhere Node 20+ runs. `c2m-diagrams` still works as an alias of `c2m diagrams`.
+With no subcommand, `c2m` reads the clipboard, converts it (HTML to Markdown, or Markdown to HTML), and writes the result back. Clipboard conversion needs macOS.
+
+It handles Excalidraw share links in both directions:
+
+- **Rich text → Markdown:** every excalidraw.com share link gets a Mermaid reading copy under it, as `c2m diagrams expand` produces. This downloads each scene read-only (one `GET` per link to `json.excalidraw.com`; the key in the link's `#` fragment is never sent). All links download at once, temporary failures are retried, and the step gives up after 6 seconds. A diagram that still cannot be fetched keeps its link with no block.
+- **Markdown → HTML:** generated reading copies are removed first, so only the link reaches Slack or a chat box. Mermaid you wrote yourself is kept. No network.
+- `--no-diagrams` skips both steps.
+
+stdout stays empty on a clean run and gets one line when something needs attention, for example `c2m: 2 of 3 diagrams skipped (timeout, 404)`, or the empty-clipboard and conversion-failed messages. A keyboard macro can notify only when stdout is not empty. Exit codes: `0` converted (also when diagrams were skipped), `1` empty clipboard, `2` conversion failed.
+
+For a macro, a global install run by absolute path skips npx's registry lookup (about 1.7s per run):
+
+```bash
+npm i -g @luutuankiet/clipboard2markdown@latest
+# prints the line to put in the macro; launchers often don't load your PATH
+echo "$(command -v node) $(npm root -g)/@luutuankiet/clipboard2markdown/bin/cli.js 2>/dev/null"
+```
+
+A global install belongs to one Node version: after switching or upgrading Node (nvm), reinstall and update the macro's path. `c2m excalidraw` and `c2m diagrams` run anywhere Node 20+ runs. `c2m-diagrams` still works as an alias of `c2m diagrams`.
 
 ## Development
 

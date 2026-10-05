@@ -50,12 +50,35 @@ describe('expandDiagramLinks / stripDiagramBlocks', () => {
     backend.requests.length = 0;
     await expand(input, { onProgress: (p) => seen.push(p), report });
     expect(backend.requests.every((r) => r.method === 'GET')).toBe(true);
-    expect(report).toEqual({ total: 3, done: 3, failed: 2, outline: 0 });
+    expect(report).toEqual({
+      total: 3, done: 3, failed: 2, outline: 0,
+      skipped: [
+        { url: 'https://excalidraw.com/#json=missing99,C0J-T6YLyjITbqXy9z_Kow', reason: '404' },
+        { url: 'https://excalidraw.com/#json=bound01,AAAAAAAAAAAAAAAAAAAAAA', reason: 'decrypt' },
+      ],
+    });
     expect(seen[0]).toEqual({ total: 3, done: 0, failed: 0, outline: 0 });
   });
 
   it('expands a link only at its first occurrence', async () => {
     const out = await expand(fs.readFileSync(path.join(mdDir, 'duplicate-and-table.input.md'), 'utf8'));
     expect(out.match(/excalidraw-mermaid:begin bound01/g)).toHaveLength(1);
+  });
+
+  it('strip removes header-led fences that lost their markers, and nothing else', () => {
+    const input = fs.readFileSync(path.join(mdDir, 'markerless-copy.input.md'), 'utf8');
+    const out = stripDiagramBlocks(input);
+    expect(out).not.toContain('%% generated from');
+    expect(out).toContain('flowchart LR\n  mine --> kept');
+    expect(out).toContain('flowchart TD\n  also --> mine');
+    expect(out).toMatch(/\[diagram\]\([^)]+\)\n\nMine:/);
+  });
+
+  it('omit mode leaves a failed link as written, with no block', async () => {
+    const input = fs.readFileSync(path.join(mdDir, 'failing-link.input.md'), 'utf8');
+    const out = await expand(input, { onFailure: 'omit' });
+    expect(out).not.toContain('could not load');
+    expect(out).not.toContain('excalidraw-mermaid:begin missing99');
+    expect(out).toContain('excalidraw-mermaid:begin shapes05');
   });
 });

@@ -53,6 +53,14 @@ describe('c2m-diagrams CLI', () => {
     expect(r.stdout).toContain('%% could not load: scene not found (HTTP 404)');
   });
 
+  it('expand retries a temporary failure instead of reporting it', () => {
+    fs.writeFileSync(path.join(backendDir, 'shapes05.fail'), '503');
+    const r = run(['expand', path.join(root, 'tests/fixtures-diagram-md/link-forms.input.md')]);
+    expect(fs.existsSync(path.join(backendDir, 'shapes05.fail'))).toBe(false);
+    expect(r.status).toBe(0);
+    expect(r.stderr).toContain('expanded 4 of 4 diagrams');
+  });
+
   it('show prints Mermaid for a link and for a local file', () => {
     const fromLink = run(['show', link('bound01')]);
     expect(fromLink.status).toBe(0);

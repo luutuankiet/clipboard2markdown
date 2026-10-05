@@ -16,15 +16,24 @@
 // returns the original.
 
 import { parseShareLink, SHARE_LINK_PATTERN } from './share-link.js';
-import { sceneToMermaid, headerLine } from './scene-to-mermaid.js';
+import { sceneToMermaid, headerLine, GENERATED_MARKER } from './scene-to-mermaid.js';
+import { failureReason } from './retry.js';
 
 const BLOCK_PATTERN = /(?:\r?\n){0,2}[ \t]*<!-- excalidraw-mermaid:begin ([A-Za-z0-9_-]+) -->[\s\S]*?<!-- excalidraw-mermaid:end \1 -->/g;
+// A generated block whose begin/end comments were lost (rich text drops HTML
+// comments): a fence whose first line is our header. Any other fence is the
+// author's and is never touched.
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const HEADER_FENCE_PATTERN = new RegExp(
+  '(?:\\r?\\n){0,2}^[ \\t]*(`{3,}|~{3,})[ \\t]*(?:mermaid)?[ \\t]*\\r?\\n' +
+  '[ \\t]*%% generated from [^\\n;]*; ' + escapeRe(GENERATED_MARKER) + '[^\\n]*\\n' +
+  '(?:[^\\n]*\\n)*?[ \\t]*\\1[ \\t]*\\r?$', 'gm');
 const LIST_MARKER = /^(\s*)([-*+]|\d+[.)])(\s+)/;
 const FENCE = /^\s*(```|~~~)/;
 const HEADING = /^\s{0,3}#{1,6}\s/;
 
 export function stripDiagramBlocks(markdown) {
-  return String(markdown).replace(BLOCK_PATTERN, '');
+  return String(markdown).replace(BLOCK_PATTERN, '').replace(HEADER_FENCE_PATTERN, '');
 }
 
 // Line table with offsets so insertion works on the original string untouched.
@@ -114,39 +123,93 @@ export function findDiagramLinks(markdown) {
 }
 
 // Replaces any existing generated blocks, then inserts fresh ones. One failing
-// link produces a visible error block and never stops the others.
+// link never stops the others.
+//
+// options.loadScene   url -> scene (required)
+// options.parallel    download every link at once instead of one by one
+// options.deadlineMs  give up on links not loaded by then (reason "timeout")
+// options.onFailure   "block" (default): a visible "could not load" block;
+//                     "omit": leave the link as written with no block
+// options.report      filled with { total, done, failed, outline, skipped },
+//                     skipped = [{ url, reason }] for every failed link
 export async function expandDiagramLinks(markdown, options) {
-  var loadScene = options && options.loadScene;
+  options = options || {};
+  var loadScene = options.loadScene;
   if (typeof loadScene !== 'function') throw new Error('expandDiagramLinks needs options.loadScene');
-  var onProgress = (options && options.onProgress) || function () {};
+  var onProgress = options.onProgress || function () {};
+  var omitFailures = options.onFailure === 'omit';
   var text = stripDiagramBlocks(markdown);
   var links = findDiagramLinks(text);
   var stats = { total: links.length, done: 0, failed: 0, outline: 0 };
+  var skipped = [];
   onProgress(Object.assign({}, stats));
 
-  var blocks = [];
-  for (var i = 0; i < links.length; i++) {
-    var item = links[i];
-    var mermaid;
-    try {
-      var scene = await loadScene(item.link.url);
-      var result = sceneToMermaid(scene, { sourceUrl: item.link.url });
-      if (result.kind === 'outline') stats.outline++;
-      mermaid = result.text;
-    } catch (err) {
-      stats.failed++;
-      mermaid = headerLine(item.link.url) + '\n%% could not load: ' + String(err && err.message ? err.message : err).replace(/\s+/g, ' ');
+  function render(item, scene) {
+    var result = sceneToMermaid(scene, { sourceUrl: item.link.url });
+    if (result.kind === 'outline') stats.outline++;
+    return result.text;
+  }
+  function settle(item, outcome) {
+    var mermaid = null;
+    if (outcome.ok) {
+      try {
+        mermaid = render(item, outcome.scene);
+      } catch (err) {
+        outcome = { ok: false, err: err };
+      }
     }
-    blocks.push({ offset: item.offset, text: '\n\n' + renderBlock(item.link.id, mermaid, item.indent) });
+    if (!outcome.ok) {
+      var err = outcome.err;
+      stats.failed++;
+      skipped.push({ url: item.link.url, reason: failureReason(err) });
+      if (!omitFailures) {
+        mermaid = headerLine(item.link.url) + '\n%% could not load: ' + String(err && err.message ? err.message : err).replace(/\s+/g, ' ');
+      }
+    }
     stats.done++;
     onProgress(Object.assign({}, stats));
+    return mermaid;
   }
+  function load(item) {
+    return Promise.resolve()
+      .then(function () { return loadScene(item.link.url); })
+      .then(function (scene) { return { ok: true, scene: scene }; }, function (err) { return { ok: false, err: err }; });
+  }
+
+  var timer;
+  var deadline = options.deadlineMs == null ? null : new Promise(function (resolve) {
+    timer = setTimeout(function () {
+      var err = new Error('no answer within ' + options.deadlineMs + 'ms');
+      err.reason = 'timeout';
+      resolve({ ok: false, err: err });
+    }, options.deadlineMs);
+  });
+  var race = function (p) { return deadline ? Promise.race([p, deadline]) : p; };
+
+  var mermaids = [];
+  var run = function (item, idx) {
+    return race(load(item)).then(function (outcome) { mermaids[idx] = settle(item, outcome); });
+  };
+  try {
+    if (options.parallel) {
+      await Promise.all(links.map(run));
+    } else {
+      for (var i = 0; i < links.length; i++) await run(links[i], i);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+
+  var blocks = [];
+  links.forEach(function (item, idx) {
+    if (mermaids[idx] != null) blocks.push({ offset: item.offset, text: '\n\n' + renderBlock(item.link.id, mermaids[idx], item.indent) });
+  });
 
   // Insert back to front so earlier offsets stay valid; same-offset blocks keep order.
   var out = text;
   for (var k = blocks.length - 1; k >= 0; k--) {
     out = out.slice(0, blocks[k].offset) + blocks[k].text + out.slice(blocks[k].offset);
   }
-  if (options && options.report) Object.assign(options.report, stats);
+  if (options.report) Object.assign(options.report, stats, { skipped: skipped });
   return out;
 }

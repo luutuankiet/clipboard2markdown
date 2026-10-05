@@ -142,14 +142,18 @@ export async function loadScene(url, options) {
   if (!link) throw new Error('not an excalidraw.com share link');
   var res = await pickFetch(options)(link.backendBase + link.id, { method: 'GET' });
   if (!res.ok) {
-    throw new Error(res.status === 404 ? 'scene not found (HTTP 404)' : 'HTTP ' + res.status);
+    var httpErr = new Error(res.status === 404 ? 'scene not found (HTTP 404)' : 'HTTP ' + res.status);
+    httpErr.status = res.status;
+    throw httpErr;
   }
   var bytes = new Uint8Array(await res.arrayBuffer());
   var data;
   try {
     data = await decodePayload(bytes, link.key);
   } catch (e) {
-    throw new Error('could not decrypt scene (wrong key or corrupt payload)');
+    var decryptErr = new Error('could not decrypt scene (wrong key or corrupt payload)');
+    decryptErr.reason = 'decrypt';
+    throw decryptErr;
   }
   return normalizeScene(data);
 }

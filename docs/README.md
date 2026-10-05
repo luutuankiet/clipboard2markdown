@@ -15,7 +15,7 @@ something is implemented.
 
 | page | covers | verified |
 |---|---|---|
-| [Clipboard I/O](architecture/clipboard-io.md) | how the web app and CLI read and write the system clipboard | 2026-09-16 |
+| [Clipboard I/O](architecture/clipboard-io.md) | how the web app and CLI read and write the system clipboard | 2026-10-05 |
 | [Conversion pipeline](architecture/conversion-pipeline.md) | how content is converted between HTML and Markdown, the two directions | 2026-09-16 |
 | [Diagram round trip](architecture/diagrams.md) | how excalidraw.com share links become Mermaid, how the diagrams mode and bin/diagrams.js work, and how a canvas is edited by link | 2026-10-05 |
 
@@ -47,5 +47,6 @@ it with a new one rather than editing it.
 
 - [JXA for CLI clipboard I/O instead of pbcopy/pbpaste](adr/0001-jxa-clipboard-io.md)
 - [The diagrams mode makes read-only requests to the Excalidraw backend](adr/0002-diagrams-mode-network-reads.md)
+- [The clipboard command expands Excalidraw links over the network](adr/0003-clipboard-command-expands-diagrams.md)
 
 <!-- END GENERATED INDEX -->

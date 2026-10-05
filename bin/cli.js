@@ -9,11 +9,19 @@ const HELP = `clipboard2markdown (short name: c2m) - clipboard HTML <-> Markdown
 and Excalidraw diagrams for agents
 
 Usage:
-  c2m              HTML on the clipboard -> Markdown, plain text -> HTML
-  c2m --to-md      force HTML -> Markdown
-  c2m --to-html    force Markdown -> HTML
-  c2m --help       show this help
-  c2m --version    print the version
+  c2m                HTML on the clipboard -> Markdown, plain text -> HTML
+  c2m --to-md        force HTML -> Markdown
+  c2m --to-html      force Markdown -> HTML
+  c2m --no-diagrams  skip the Excalidraw step below (no network at all)
+  c2m --help         show this help
+  c2m --version      print the version
+
+Excalidraw share links: HTML -> Markdown adds a Mermaid reading copy under
+every excalidraw.com link, downloading each scene read-only (one GET per link
+to json.excalidraw.com; the key in the link's # fragment is never sent).
+Markdown -> HTML removes generated reading copies first, so only the link is
+pasted; Mermaid you wrote yourself is kept. A diagram that cannot be fetched
+in a few seconds is skipped and its link left as written.
 
   c2m excalidraw <file|->   JSON diagram -> excalidraw.com share link and
                             Mermaid preview (see c2m excalidraw --help)
@@ -26,6 +34,8 @@ Every command also runs without installing:
 Clipboard conversion needs macOS (it uses osascript); excalidraw and
 diagrams run anywhere Node 20+ runs.
 Exit codes: 0 converted, 1 empty clipboard, 2 conversion failed.
+stdout is empty on a clean clipboard run; it gets one line when something
+needs attention (skipped diagrams, empty clipboard, failed conversion).
 `;
 
 // Converters need jsdom's DOM globals; loaded lazily so commands that
@@ -115,20 +125,9 @@ pb.setStringForType(str, "public.utf8-plain-text");
   }
 }
 
-// --- core logic (exported for testing) ---
+// --- core logic lives in src/clipboard-convert.js; re-exported for tests ---
 
-/**
- * Determine conversion direction.
- * @param {'html'|'text'} clipboardType - what the pasteboard held
- * @param {boolean} forceToMd - --to-md flag was passed
- * @param {boolean} forceToHtml - --to-html flag was passed
- * @returns {'to-md'|'to-html'}
- */
-export function detectDirection(clipboardType, forceToMd, forceToHtml) {
-  if (forceToMd) return 'to-md';
-  if (forceToHtml) return 'to-html';
-  return clipboardType === 'html' ? 'to-md' : 'to-html';
-}
+export { detectDirection } from '../src/clipboard-convert.js';
 
 // --- entry point (only runs when executed directly) ---
 
@@ -173,29 +172,36 @@ if (isEntryPoint()) {
     process.exit(2);
   }
 
-  const forceToMd = args.includes('--to-md');
-  const forceToHtml = args.includes('--to-html');
+  // stdout carries one line only when something needs attention, so a macro
+  // can notify on "stdout not empty"; stderr keeps the diagnostics
+  const notify = (line) => {
+    console.error(line);
+    process.stdout.write(line + '\n');
+  };
 
   try {
-    const { convert, convertMdToHtml } = await loadConverters();
+    const { convertClipboard } = await import('../src/clipboard-convert.js');
+    const converters = await loadConverters();
     const clipboard = readClipboard();
     if (!clipboard.content || !clipboard.content.trim()) {
-      console.error('c2m: empty clipboard');
+      notify('c2m: empty clipboard');
       process.exit(1);
     }
-    const direction = detectDirection(clipboard.type, forceToMd, forceToHtml);
-    if (direction === 'to-md') {
-      const md = convert(clipboard.content);
-      console.error(`c2m: ${clipboard.type} → md (${md.length} chars)`);
-      writeTextToClipboard(md);
-    } else {
-      const html = convertMdToHtml(clipboard.content);
-      console.error(`c2m: ${clipboard.type} → html (${html.length} chars)`);
-      writeHtmlToClipboard(html);
-    }
+    const result = await convertClipboard({
+      content: clipboard.content,
+      type: clipboard.type,
+      forceToMd: args.includes('--to-md'),
+      forceToHtml: args.includes('--to-html'),
+      diagrams: !args.includes('--no-diagrams'),
+      converters,
+    });
+    console.error(`c2m: ${clipboard.type} → ${result.kind} (${result.output.length} chars)`);
+    if (result.kind === 'md') writeTextToClipboard(result.output);
+    else writeHtmlToClipboard(result.output);
+    if (result.notice) notify(result.notice);
     process.exit(0);
   } catch (e) {
-    console.error(`c2m: ${e.message}`);
+    notify(`c2m: ${e.message}`);
     process.exit(2);
   }
 }
