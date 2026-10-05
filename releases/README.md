@@ -25,4 +25,4 @@ The package version comes from the tag, so `package.json` doesn't need a bump fi
 | Version | Date | Theme |
 |---|---|---|
 | [v0.2.0](v0.2.0.md) | 2026-10-05 | agents draw Excalidraw diagrams: `c2m excalidraw` |
-| [v0.2.1](v0.2.1.md) | 2026-10-05 | fix: `c2m` and `c2m-diagrams` commands missing from v0.2.0 |
+| [v0.2.1](v0.2.1.md) | 2026-10-05 | `bin` paths npm 12 accepts as written; stricter smoke test |
