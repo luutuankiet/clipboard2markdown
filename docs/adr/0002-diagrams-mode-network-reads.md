@@ -15,8 +15,9 @@ nothing is uploaded from the page. The download endpoint answers with
 
 The diagram code is loaded with a dynamic `import()` the first time the mode is
 used, so the HTML -> MD and MD -> HTML modes neither load nor call it and still
-make no requests. Uploading a new scene exists only in the agent CLI,
-`bin/diagrams.js`, which an agent runs deliberately.
+make no requests. Uploading a new scene exists only in the agent CLIs,
+`bin/diagrams.js` and `c2m excalidraw` (`bin/excalidraw.js`), which an agent
+runs deliberately.
 
 Rejected: a self-hosted backend or proxy. Client-facing links must stay plain
 excalidraw.com links, and a proxy would put a server of ours in the path of

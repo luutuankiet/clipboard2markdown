@@ -48,6 +48,14 @@ node bin/diagrams.js edit '<share url>' --ops '[{"op":"rename","node":"auth","la
 
 `edit` patches the existing canvas (rename, add, connect, disconnect, relabel-edge, remove), keeps every untouched element exactly as it was, uploads the result and prints exactly one new share link. The old link keeps working. Node ids are the ones `show` prints. Uploading exists only in the CLI.
 
+**New diagram from JSON** (`c2m excalidraw`, Node 20+, any OS): an agent describes boxes, labels and arrows in a short JSON array and gets back a share link, a Mermaid preview of what it drew, and layout warnings (overlaps, labels that do not fit, loose arrows). `c2m excalidraw --help` is the full manual: input format, worked example, sizing rules and the check-fix-upload loop.
+
+```bash
+c2m excalidraw diagram.json --no-upload   # check: preview + warnings only
+c2m excalidraw diagram.json               # upload: link on line 1
+cat diagram.json | c2m excalidraw -       # same, from stdin
+```
+
 The Mermaid is deliberately lossy: positions, colours, fonts and arrow curves are dropped; boxes, labels, connections, line style and grouping are kept. The canvas stays the master copy.
 
 ## Demo
@@ -55,6 +63,17 @@ The Mermaid is deliberately lossy: positions, colours, fonts and arrow curves ar
 **Live:** https://luutuankiet.github.io/clipboard2markdown/
 
 ![Screencast](screencast.gif)
+
+## Command Line
+
+The same converters ship as the `c2m` CLI:
+
+```bash
+npm install -g @luutuankiet/clipboard2markdown
+c2m --help
+```
+
+`c2m` reads the clipboard, converts it (HTML to Markdown, or Markdown to HTML), and writes the result back. Clipboard conversion needs macOS. `c2m excalidraw` and `c2m-diagrams` run anywhere Node 20+ runs.
 
 ## Development
 

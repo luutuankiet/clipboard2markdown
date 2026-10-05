@@ -14,7 +14,7 @@ Confluence, Slack, Google Docs/Sheets/Chat.
   modes make no network requests at all. The single exception is the
   MD -> MD (diagrams) mode: read-only `GET`s to the Excalidraw backend named in
   each pasted share link, loaded lazily so other modes never pull that code.
-  Uploading exists only in `bin/diagrams.js`. See
+  Uploading exists only in `bin/diagrams.js` and `bin/excalidraw.js`. See
   `docs/adr/0002-diagrams-mode-network-reads.md`. This is a
   trust property the README promises users.
 - **Platform rules are additive.** Each platform module exports `rules` and a
@@ -31,6 +31,7 @@ Confluence, Slack, Google Docs/Sheets/Chat.
 ```
 bin/cli.js                  CLI entry point (Alfred workflow)
 bin/diagrams.js             Diagram CLI for agents: expand, strip, show, edit
+bin/excalidraw.js           `c2m excalidraw`: JSON skeleton -> new share link
 clipboard2markdown.js       Web UI controller (paste events, preview, copy)
 index.html                  Web app shell
 src/converter.js            HTML-to-MD pipeline (Turndown + post-processing)

@@ -1,19 +1,42 @@
 #!/usr/bin/env node
-import { JSDOM } from 'jsdom';
 import { spawnSync } from 'child_process';
-import { writeFileSync, unlinkSync } from 'fs';
+import { writeFileSync, unlinkSync, readFileSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
-// Polyfill browser globals required by converter modules (unavailable in Node.js)
-const { window: domWindow } = new JSDOM('<!DOCTYPE html>');
-globalThis.DOMParser = domWindow.DOMParser;
-globalThis.NodeFilter = domWindow.NodeFilter;
+const HELP = `c2m - convert the clipboard between rich HTML and Markdown
 
-// Dynamic imports run after globals are set, ensuring converters can use DOMParser
-const { convert } = await import('../src/converter.js');
-const { convertMdToHtml } = await import('../src/md-to-html.js');
+Usage:
+  c2m              HTML on the clipboard -> Markdown, plain text -> HTML
+  c2m --to-md      force HTML -> Markdown
+  c2m --to-html    force Markdown -> HTML
+  c2m --help       show this help
+  c2m --version    print the version
+
+  c2m excalidraw <file|->   JSON diagram -> excalidraw.com share link and
+                            Mermaid preview (any OS; see c2m excalidraw --help)
+
+Clipboard conversion needs macOS (it uses osascript).
+Exit codes: 0 converted, 1 empty clipboard, 2 conversion failed.
+`;
+
+// Converters need jsdom's DOM globals; loaded lazily so commands that
+// don't touch the clipboard skip the jsdom startup cost
+async function loadConverters() {
+  const { JSDOM } = await import('jsdom');
+  const { window: domWindow } = new JSDOM('<!DOCTYPE html>');
+  globalThis.DOMParser = domWindow.DOMParser;
+  globalThis.NodeFilter = domWindow.NodeFilter;
+  const { convert } = await import('../src/converter.js');
+  const { convertMdToHtml } = await import('../src/md-to-html.js');
+  return { convert, convertMdToHtml };
+}
+
+function readVersion() {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  return pkg.version;
+}
 
 // --- clipboard I/O via JXA (macOS only) ---
 
@@ -102,12 +125,43 @@ export function detectDirection(clipboardType, forceToMd, forceToHtml) {
 
 // --- entry point (only runs when executed directly) ---
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// npm installs bin as a symlink, so compare real paths
+function isEntryPoint() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   const args = process.argv.slice(2);
+
+  // Subcommands dispatch before any clipboard code, so they run off macOS
+  if (args[0] === 'excalidraw') {
+    const { runExcalidraw } = await import('./excalidraw.js');
+    process.exit(await runExcalidraw(args.slice(1), { stdout: process.stdout, stderr: process.stderr }));
+  }
+
+  if (args.includes('--help') || args.includes('-h')) {
+    process.stdout.write(HELP);
+    process.exit(0);
+  }
+  if (args.includes('--version') || args.includes('-v')) {
+    process.stdout.write(`${readVersion()}\n`);
+    process.exit(0);
+  }
+  if (process.platform !== 'darwin') {
+    process.stderr.write('c2m: clipboard conversion needs macOS. See c2m --help.\n');
+    process.exit(2);
+  }
+
   const forceToMd = args.includes('--to-md');
   const forceToHtml = args.includes('--to-html');
 
   try {
+    const { convert, convertMdToHtml } = await loadConverters();
     const clipboard = readClipboard();
     if (!clipboard.content || !clipboard.content.trim()) {
       console.error('c2m: empty clipboard');

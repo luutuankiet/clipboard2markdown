@@ -49,7 +49,7 @@ export function measureText(text, fontSize) {
 }
 
 // How much bigger than its text a container must be, by shape.
-function containerFactor(type) {
+export function containerFactor(type) {
   if (type === 'ellipse') return Math.SQRT2;
   if (type === 'diamond') return 2;
   return 1;

@@ -5,3 +5,4 @@ export { sceneToMermaid } from './scene-to-mermaid.js';
 export { expandDiagramLinks, stripDiagramBlocks, findDiagramLinks } from './markdown.js';
 export { applyEdits, editLink } from './edit.js';
 export { analyzeScene, TUNING } from './scene-model.js';
+export { buildSkeleton } from './skeleton.js';

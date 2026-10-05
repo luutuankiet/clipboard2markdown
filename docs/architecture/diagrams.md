@@ -28,7 +28,9 @@ and the CLI; its only dependencies are `fetch`, WebCrypto and `pako`.
 | `src/diagrams/edit.js` | ~61 | `wrapLabel`: bound text wraps to the box width; the box grows in height |
 | | ~469 | `applyEdits` (pure, on a deep copy), `editLink` |
 | `src/diagrams/browser.js` | all | the read-only subset the page imports |
+| `src/diagrams/skeleton.js` | all | `buildSkeleton`: short JSON diagram -> full scene, preview, lint warnings (pure) |
 | `bin/diagrams.js` | all | CLI: `expand`, `strip`, `show`, `edit` |
+| `bin/excalidraw.js` | all | `c2m excalidraw`: skeleton -> upload -> link; its help text is the agent manual |
 | `clipboard2markdown.js` | ~564-625 | page mode: paste handling and progress |
 | | ~694 | Strip diagram blocks button |
 
