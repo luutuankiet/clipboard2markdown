@@ -1,11 +1,11 @@
 {
   "name": "@luutuankiet/clipboard2markdown",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Convert rich clipboard HTML from Jira, Confluence, Slack and Google apps into clean Markdown, and back.",
   "type": "module",
   "bin": {
-    "c2m": "./bin/cli.js",
-    "c2m-diagrams": "./bin/diagrams.js"
+    "c2m": "bin/cli.js",
+    "c2m-diagrams": "bin/diagrams.js"
   },
   "files": [
     "bin",

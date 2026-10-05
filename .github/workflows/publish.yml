@@ -27,11 +27,19 @@ jobs:
       - name: Verify package contents
         run: npm pack --dry-run
       - name: Smoke test the installed CLI
+        # Pack with the same npm the publish job uses: npm 12 silently drops
+        # bin entries it considers invalid, and the runner's npm does not
         run: |
-          npm pack
+          npx -y npm@latest pack 2>&1 | tee pack.log
+          if grep -q "auto-corrected" pack.log; then
+            echo "::error::npm auto-corrected package.json; run 'npx npm@latest pkg fix'"
+            exit 1
+          fi
           npm install -g ./luutuankiet-clipboard2markdown-*.tgz
           c2m --help
           c2m --version
+          c2m excalidraw --help
+          c2m-diagrams --help
 
   release:
     runs-on: ubuntu-latest
