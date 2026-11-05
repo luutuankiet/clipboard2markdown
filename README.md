@@ -58,7 +58,7 @@ cat diagram.json | c2m excalidraw -       # same, from stdin
 
 The Mermaid is deliberately lossy: positions, colours, fonts and arrow curves are dropped; boxes, labels, connections, line style and grouping are kept. The canvas stays the master copy.
 
-**Diagrams as PNG** (`c2m excalidraw --png`, Node 20+, any OS): draws one or more diagrams locally, for pasting into a Google Doc. No browser is needed and the drawing makes no network request; the share link is uploaded as usual (skip it with `--no-upload`). Input is the JSON array above or a whole scene (`{"elements": [...]}`, such as a `.excalidraw` file).
+**Diagrams as PNG** (`c2m excalidraw --png`, Node 20+, any OS): draws one or more diagrams locally, for pasting into a Google Doc. No browser is needed and the drawing makes no network request; the share link is uploaded as usual (skip it with `--no-upload`). Input is the JSON array above or a whole scene (`{"elements": [...]}`, such as a `.excalidraw` file); a scene's elements may use the same shorthand (`label`, `start`/`end`, arrows without `points`), and a scene without it is drawn as is.
 
 ```bash
 c2m excalidraw --png a.json b.json          # PNGs in ~/.cache/c2m/renders/

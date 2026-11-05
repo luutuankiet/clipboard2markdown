@@ -111,7 +111,9 @@ PNG (for pasting into a Google Doc)
   Draws each diagram locally (no browser; the drawing itself makes no network
   request) and uploads it for its share link as above. Each input is either
   the element array described here or a whole scene ({"elements": [...]},
-  e.g. a .excalidraw file). For each input <name>.json it writes:
+  e.g. a .excalidraw file). A scene's elements may use the same shorthand
+  (label, start/end, arrows without points); a scene without it is drawn and
+  uploaded as is. For each input <name>.json it writes:
     <name>.png          for the document: scale 3, lowered until the image
                         has at most 25,000,000 pixels (Google Docs' limit)
     <name>.review.png   for a quick look: at most 1000 px on the long side
@@ -156,11 +158,24 @@ async function upload(scene, fetchImpl) {
   }
 }
 
-// A whole scene ({elements: [...]}, as in a .excalidraw file) is drawn as is;
-// anything else goes through the skeleton builder.
+// The help's shorthand: `label`, `start`/`end`, or an arrow/line left without
+// points for the builder to route. A real Excalidraw element has none of these.
+function usesShorthand(el) {
+  if (!el || typeof el !== 'object') return false;
+  if ('label' in el || 'start' in el || 'end' in el) return true;
+  return (el.type === 'arrow' || el.type === 'line') && !Array.isArray(el.points);
+}
+
+// A whole scene ({elements: [...]}, as in a .excalidraw file) is drawn as is,
+// unless it uses the shorthand: then it goes through the skeleton builder like
+// an element array, keeping the scene's own appState and files.
 function toScene(input) {
   if (input && !Array.isArray(input) && Array.isArray(input.elements)) {
-    return { scene: input, preview: null, warnings: [] };
+    if (!input.elements.some(usesShorthand)) return { scene: input, preview: null, warnings: [] };
+    var built = buildSkeleton(input.elements);
+    if (input.appState) built.scene.appState = input.appState;
+    if (input.files) built.scene.files = input.files;
+    return built;
   }
   return buildSkeleton(input);
 }

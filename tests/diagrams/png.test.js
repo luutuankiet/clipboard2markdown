@@ -176,6 +176,41 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     expect(requests).toEqual([]);
   });
 
+  it('accepts the shorthand inside a whole scene, as it does in an element array', async () => {
+    const backend = createFakeBackend();
+    const input = path.join(tmp, 'shorthand.excalidraw');
+    fs.writeFileSync(input, JSON.stringify({ type: 'excalidraw', version: 2, elements: twoBoxes }));
+    const out = path.join(tmp, 'shorthand-out');
+    const r = await run(['--png', out, input], { fetch: backend.fetch });
+    expect(r.stderr).toBe('');
+    expect(r.code).toBe(0);
+    // Same drawing as the array form in the first test.
+    expect(pngSize(fs.readFileSync(path.join(out, 'shorthand.png'))).width).toBe(1860);
+
+    const { loadScene } = await import('../../src/diagrams/share-link.js');
+    const url = r.stdout.match(/\[Edit this diagram\]\((.*)\)/)[1];
+    const els = (await loadScene(url, { fetch: backend.fetch })).elements;
+    const arrow = els.find((e) => e.id === 'e');
+    expect(arrow.points).toHaveLength(2);
+    expect(arrow.startBinding.elementId).toBe('api');
+    expect(arrow.endBinding.elementId).toBe('db');
+    expect(els.filter((e) => e.type === 'text' && e.containerId).map((e) => e.text).sort()).toEqual(['API gateway', 'Postgres', 'reads']);
+    expect(els.some((e) => 'label' in e || 'start' in e || 'end' in e)).toBe(false);
+  });
+
+  it('uploads a full Excalidraw scene unchanged', async () => {
+    const backend = createFakeBackend();
+    const input = path.join(root, 'tests/fixtures-diagrams/01-bound-arrows.excalidraw');
+    const out = path.join(tmp, 'full-out');
+    const r = await run(['--png', out, input], { fetch: backend.fetch });
+    expect(r.stderr).toBe('');
+    expect(r.code).toBe(0);
+    const { loadScene } = await import('../../src/diagrams/share-link.js');
+    const url = r.stdout.match(/\[Edit this diagram\]\((.*)\)/)[1];
+    const uploaded = await loadScene(url, { fetch: backend.fetch });
+    expect(uploaded.elements).toEqual(JSON.parse(fs.readFileSync(input, 'utf8')).elements);
+  });
+
   it('refuses two inputs with the same name before drawing anything', async () => {
     const a = write('same.json', twoBoxes);
     fs.mkdirSync(path.join(tmp, 'other'), { recursive: true });
