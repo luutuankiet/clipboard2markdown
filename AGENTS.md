@@ -35,7 +35,9 @@ Confluence, Slack, Google Docs/Sheets/Chat.
 ```
 bin/cli.js                  The one CLI (`clipboard2markdown`, alias `c2m`): clipboard, excalidraw, diagrams
 bin/diagrams.js             `c2m diagrams`: expand, strip, show, edit
-bin/excalidraw.js           `c2m excalidraw`: JSON skeleton -> new share link
+bin/excalidraw.js           `c2m excalidraw`: JSON skeleton -> new share link; --png draws PNGs
+src/excalidraw-png.js       Scene -> PNG for --png: vendored excalidraw under jsdom, then resvg
+scripts/build-excalidraw-bundle.mjs  Builds vendor/excalidraw/ (gitignored, shipped); runs on npm install/pack
 src/clipboard-convert.js    What the clipboard command does to content (direction, diagrams step)
 clipboard2markdown.js       Web UI controller (paste events, preview, copy)
 index.html                  Web app shell
@@ -61,6 +63,7 @@ tests/                      Fixture-based regression suite
   diagrams/                 Diagram tests: scene fixtures, Markdown, edit, CLI
   fixtures-diagrams/        Synthetic .excalidraw scenes + expected .mmd
   fixtures-diagram-md/      <name>.input.md / <name>.expected.md pairs
+  fixtures-png/             Fixed-seed scene + known-good Excalifont render for --png
 docs/                       Project documentation
 scripts/gen-docs-index.sh   Regenerates docs/README.md index
 ```

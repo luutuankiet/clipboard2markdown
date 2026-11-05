@@ -58,6 +58,15 @@ cat diagram.json | c2m excalidraw -       # same, from stdin
 
 The Mermaid is deliberately lossy: positions, colours, fonts and arrow curves are dropped; boxes, labels, connections, line style and grouping are kept. The canvas stays the master copy.
 
+**Diagrams as PNG** (`c2m excalidraw --png`, Node 20+, any OS): draws one or more diagrams locally, for pasting into a Google Doc. No browser is needed and the drawing makes no network request; the share link is uploaded as usual (skip it with `--no-upload`). Input is the JSON array above or a whole scene (`{"elements": [...]}`, such as a `.excalidraw` file).
+
+```bash
+c2m excalidraw --png a.json b.json          # PNGs in ~/.cache/c2m/renders/
+c2m excalidraw --png out/ a.json            # PNGs in out/
+```
+
+Per diagram it writes `<name>.png` (scale 3, lowered until the image has at most 25,000,000 pixels, Google Docs' limit) and `<name>.review.png` (at most 1000 px on the long side), then prints an image line `![<name>](attach:<name>)`, an `[Edit this diagram](<share link>)` line and the images map entry `"<name>": "@file64:/abs/path/<name>.png"`. Review agents should read the Mermaid preview first and open the review PNG only when the preview is not enough. Each run first deletes PNGs older than 24 hours in the default cache folder; a folder you name is never cleaned. CJK text is not drawn, because the 13 MB CJK font is left out of the package; such diagrams get a warning.
+
 ## Demo
 
 **Live:** https://luutuankiet.github.io/clipboard2markdown/

@@ -33,6 +33,8 @@ and the CLI; its only dependencies are `fetch`, WebCrypto and `pako`.
 | `src/diagrams/skeleton.js` | all | `buildSkeleton`: short JSON diagram -> full scene, preview, lint warnings (pure) |
 | `bin/diagrams.js` | all | `c2m diagrams` (alias `c2m-diagrams`): `expand`, `strip`, `show`, `edit` |
 | `bin/excalidraw.js` | all | `c2m excalidraw`: skeleton -> upload -> link; its help text is the agent manual |
+| `src/excalidraw-png.js` | all | `--png`: scene -> SVG (vendored excalidraw under jsdom) -> PNG (resvg); cache clean-up, scale pick |
+| `scripts/build-excalidraw-bundle.mjs` | all | builds `vendor/excalidraw/` (bundle + fonts, no CJK font) from the dev dependency |
 | `clipboard2markdown.js` | ~564-625 | page mode: paste handling and progress |
 | | ~694 | Strip diagram blocks button |
 
@@ -106,6 +108,28 @@ warning. Boxes are placed 120px apart so a labelled arrow between them stays
 visible.
 
 Images do not survive an edit; see `docs/traps/EDITED_LINK_LOSES_IMAGES.md`.
+
+## PNG rendering
+
+Verified 2026-11-05. `c2m excalidraw --png` runs excalidraw's own `exportToSvg`,
+so the PNG matches what excalidraw.com draws. It cannot import
+`@excalidraw/excalidraw` at runtime (extensionless imports Node's ESM loader
+rejects, and about 275 MB installed), so `scripts/build-excalidraw-bundle.mjs`
+bundles it with esbuild into `vendor/excalidraw/`. That folder is gitignored and
+listed in `files`; the `prepare` script builds it on `npm install` in a clone and
+on `npm pack` / `npm publish`. The package is about 2.9 MB packed.
+
+Under jsdom the module needs a stand-in canvas 2D context, `FontFace` and
+`document.fonts`. Font requests go to a `.invalid` origin answered from
+`vendor/excalidraw/fonts/`; a font that is not there (Xiaolai, CJK) is refused
+locally, because excalidraw would otherwise retry on a public CDN.
+
+resvg ignores the `@font-face` rules in the SVG and resvg-js 2.6.2 ignores
+`fontBuffers`, so text silently falls back to a system font. The embedded woff2
+fonts are decoded to TTF in a temp folder and passed as `fontFiles`, with system
+fonts off; a render whose SVG has text but no embedded font is an error.
+`tests/diagrams/png.test.js` compares a fixed-seed label against
+`tests/fixtures-png/excalifont-label.review.png`.
 
 ## Testing
 

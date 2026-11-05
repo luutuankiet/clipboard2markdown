@@ -4,7 +4,8 @@
 // The help text below is the agent's whole manual for this command; keep it in
 // step with src/diagrams/skeleton.js.
 
-import { readFileSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { basename, resolve } from 'path';
 import { buildSkeleton } from '../src/diagrams/skeleton.js';
 import { saveScene } from '../src/diagrams/share-link.js';
 
@@ -14,6 +15,8 @@ Usage:
   c2m excalidraw <file.json>      read the diagram from a file
   c2m excalidraw -                read the diagram from stdin
   c2m excalidraw --no-upload ...  check only: print preview and warnings, no link
+  c2m excalidraw --png [<dir>] <file.json>...
+                                  also draw each diagram as PNG (see PNG below)
   c2m excalidraw --help           show this help
 
 OUTPUT (stdout, in this order)
@@ -103,6 +106,30 @@ WARNINGS
   dropped            unsupported type, or an MCP-only command such as
                      cameraUpdate, delete, restoreCheckpoint
 
+PNG (for pasting into a Google Doc)
+  c2m excalidraw --png [<dir>] a.json b.json ...
+  Draws each diagram locally (no browser; the drawing itself makes no network
+  request) and uploads it for its share link as above. Each input is either
+  the element array described here or a whole scene ({"elements": [...]},
+  e.g. a .excalidraw file). For each input <name>.json it writes:
+    <name>.png          for the document: scale 3, lowered until the image
+                        has at most 25,000,000 pixels (Google Docs' limit)
+    <name>.review.png   for a quick look: at most 1000 px on the long side
+  <dir> defaults to ~/.cache/c2m/renders/ ($XDG_CACHE_HOME/c2m/renders/);
+  each run first deletes PNGs there older than 24 h. A <dir> you name is
+  never cleaned. --png=<dir> also works.
+  Then, per diagram:
+    ![<name>](attach:<name>)                  the image line for the document
+    [Edit this diagram](<share link>)         omitted with --no-upload
+    "<name>": "@file64:/abs/path/<name>.png"  the entry for the images map
+    review: /abs/path/<name>.review.png
+    warning: ...                              as above, if any
+  To check a drawing, read its Mermaid preview first (rerun without --png, or
+  c2m diagrams show <file> for a whole scene); open the review PNG only when
+  the preview cannot answer the question.
+  Text uses Excalidraw's fonts; CJK text is not drawn (the CJK font is not
+  shipped) and gets a warning.
+
 NOT SUPPORTED
   images, frames, freedraw, Mermaid as input, editing an existing link (use
   c2m diagrams edit for that), writing .excalidraw files.
@@ -129,32 +156,59 @@ async function upload(scene, fetchImpl) {
   }
 }
 
-// Returns the exit code. `io.fetch` and `io.stdin` exist for tests.
+// A whole scene ({elements: [...]}, as in a .excalidraw file) is drawn as is;
+// anything else goes through the skeleton builder.
+function toScene(input) {
+  if (input && !Array.isArray(input) && Array.isArray(input.elements)) {
+    return { scene: input, preview: null, warnings: [] };
+  }
+  return buildSkeleton(input);
+}
+
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error('input is not valid JSON: ' + e.message);
+  }
+}
+
+function sceneName(target) {
+  return target === '-' ? 'diagram' : basename(target).replace(/\.(json|excalidraw)$/i, '');
+}
+
+// `--png` takes an optional folder: the next argument is the folder unless it
+// looks like an input (-, *.json, *.excalidraw) or an option.
+function looksLikeInput(a) {
+  return a === '-' || a.startsWith('--') || /\.(json|excalidraw)$/i.test(a);
+}
+
+// Returns the exit code. `io.fetch`, `io.stdin` and `io.env` exist for tests.
 export async function runExcalidraw(argv, io) {
   var stdout = io.stdout, stderr = io.stderr;
   var noUpload = false;
+  var png = false, pngDir = null;
   var targets = [];
   for (var i = 0; i < argv.length; i++) {
     var a = argv[i];
     if (a === '--help' || a === '-h') { stdout.write(EXCALIDRAW_HELP); return 0; }
     if (a === '--no-upload') noUpload = true;
+    else if (a === '--png') {
+      png = true;
+      if (i + 1 < argv.length && !looksLikeInput(argv[i + 1])) pngDir = argv[++i];
+    } else if (a.startsWith('--png=')) { png = true; pngDir = a.slice(6); }
     else if (a.startsWith('--')) { stderr.write('c2m excalidraw: unknown option ' + a + '\n'); return 1; }
     else targets.push(a);
   }
-  if (targets.length !== 1) {
-    stderr.write('c2m excalidraw: expected one <file.json> or - for stdin. See c2m excalidraw --help.\n');
+  if (png ? targets.length < 1 : targets.length !== 1) {
+    stderr.write('c2m excalidraw: expected ' + (png ? 'one or more <file.json>' : 'one <file.json>') +
+      ' or - for stdin. See c2m excalidraw --help.\n');
     return 1;
   }
 
   try {
-    var text = readInput(targets[0], io.stdin);
-    var input;
-    try {
-      input = JSON.parse(text);
-    } catch (e) {
-      throw new Error('input is not valid JSON: ' + e.message);
-    }
-    var built = buildSkeleton(input);
+    if (png) return await runPng(targets, { dir: pngDir, noUpload: noUpload }, io);
+    var built = buildSkeleton(parseJson(readInput(targets[0], io.stdin)));
     var url = noUpload ? null : await upload(built.scene, io.fetch);
     if (url) stdout.write(url + '\n');
     stdout.write('```mermaid\n' + built.preview + '\n```\n');
@@ -164,4 +218,56 @@ export async function runExcalidraw(argv, io) {
     stderr.write('c2m excalidraw: ' + (e && e.message ? e.message : e) + '\n');
     return 1;
   }
+}
+
+async function runPng(targets, opts, io) {
+  var stdout = io.stdout;
+  var names = targets.map(sceneName);
+  var dup = names.find(function (n, k) { return names.indexOf(n) !== k; });
+  if (dup) throw new Error('two inputs are both named "' + dup + '"; their PNGs would overwrite each other');
+  if (targets.filter(function (t) { return t === '-'; }).length > 1) throw new Error('stdin (-) can be read only once');
+
+  // Read and build every input before drawing anything, so a typo in the
+  // last file costs no renders.
+  var items = targets.map(function (t, k) {
+    var built = toScene(parseJson(readInput(t, io.stdin)));
+    return { name: names[k], scene: built.scene, warnings: built.warnings };
+  });
+
+  var render = await import('../src/excalidraw-png.js');
+  var dir;
+  if (opts.dir) dir = resolve(opts.dir);
+  else {
+    dir = render.defaultRenderDir(io.env);
+    render.cleanRenderCache(dir);
+  }
+  mkdirSync(dir, { recursive: true });
+
+  var blocks = [];
+  for (var k = 0; k < items.length; k++) {
+    var it = items[k];
+    var out;
+    try {
+      out = await render.renderScene(it.scene);
+    } catch (e) {
+      throw new Error(it.name + ': ' + (e && e.message ? e.message : e));
+    }
+    var file = resolve(dir, it.name + '.png');
+    var reviewFile = resolve(dir, it.name + '.review.png');
+    writeFileSync(file, out.png);
+    writeFileSync(reviewFile, out.review);
+    var url = opts.noUpload ? null : await upload(it.scene, io.fetch);
+    var warnings = it.warnings.slice();
+    if (out.scale < 3) warnings.push('drawn at scale ' + out.scale + ' to stay under 25,000,000 pixels');
+    if (render.hasCjkText(it.scene)) warnings.push('CJK text is not drawn: the CJK font is not shipped');
+    var lines = ['![' + it.name + '](attach:' + it.name + ')'];
+    if (url) lines.push('[Edit this diagram](' + url + ')');
+    lines.push(JSON.stringify(it.name) + ': ' + JSON.stringify('@file64:' + file));
+    lines.push('review: ' + reviewFile);
+    warnings.forEach(function (w) { lines.push('warning: ' + w); });
+    blocks.push(lines.join('\n') + '\n');
+  }
+  stdout.write(blocks.join('\n'));
+  stdout.write('\nCheck a drawing by its Mermaid preview first (c2m excalidraw <file> --no-upload, or c2m diagrams show <file> for a whole scene); open the review PNG only if that is not enough.\n');
+  return 0;
 }
