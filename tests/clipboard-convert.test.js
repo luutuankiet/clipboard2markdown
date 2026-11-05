@@ -97,10 +97,17 @@ describe('rich text -> Markdown', () => {
   });
 
   it('a link that never answers is skipped at the deadline as timeout; the others still land', async () => {
-    vi.useFakeTimers();
+    // Only timeouts are faked. Decrypting the fast link is real async work in
+    // Node's thread pool, so fake time moves in small steps with a real pause
+    // between them; one 6000 ms jump hits the deadline first on a slow runner.
+    const realSetTimeout = globalThis.setTimeout;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const s = scripted({ shapes05: ['hang', 'hang', 'hang'] });
     const pending = run(`<p><a href="${link('shapes05')}">slow</a> <a href="${link('bound01')}">fast</a></p>`, { fetch: s.fetch });
-    await vi.advanceTimersByTimeAsync(6000);
+    for (let t = 0; t < 6000; t += 100) {
+      await new Promise((resolve) => realSetTimeout(resolve, 10));
+      await vi.advanceTimersByTimeAsync(100);
+    }
     const r = await pending;
     expect(r.output).not.toContain('excalidraw-mermaid:begin shapes05');
     expect(r.output).toContain('excalidraw-mermaid:begin bound01');
