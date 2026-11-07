@@ -73,6 +73,27 @@ describe('c2m excalidraw skeleton', () => {
     expect(warnings).toEqual([]);
   });
 
+  it('puts a container title top-left, keeps member labels centred, and respects explicit alignment', () => {
+    const { scene, preview, warnings } = buildSkeleton([
+      { id: 'grp', type: 'rectangle', x: -40, y: -60, width: 700, height: 220, label: { text: 'Group' } },
+      box('a', 0, 0), box('b', 400, 0),
+      { id: 'grp2', type: 'rectangle', x: 0, y: 400, width: 400, height: 200, label: { text: 'Mid', verticalAlign: 'middle', textAlign: 'center' } },
+      box('c', 120, 480),
+      { id: 'tag', type: 'rectangle', x: 800, y: 0, width: 200, height: 100, label: { text: 'Corner', verticalAlign: 'top', textAlign: 'left' } },
+    ]);
+    const els = byId(scene);
+    expect(els['grp-label']).toMatchObject({ textAlign: 'left', verticalAlign: 'top', containerId: 'grp', x: -35, y: -55 });
+    expect(els['a-label']).toMatchObject({ textAlign: 'center', verticalAlign: 'middle' });
+    expect(els['a-label'].y + els['a-label'].height / 2).toBeCloseTo(35);
+    const mid = els['grp2-label'];
+    expect(mid).toMatchObject({ textAlign: 'center', verticalAlign: 'middle' });
+    expect(mid.x + mid.width / 2).toBeCloseTo(200);
+    expect(mid.y + mid.height / 2).toBeCloseTo(500);
+    expect(els['tag-label']).toMatchObject({ textAlign: 'left', verticalAlign: 'top', x: 805, y: 5 });
+    expect(preview).toMatch(/subgraph \S+ \[Group\]/);
+    expect(warnings).toEqual([]);
+  });
+
   it('rejects input that is not an element array, without printing a link', async () => {
     const out = [], err = [];
     const io = { stdout: { write: (s) => out.push(s) }, stderr: { write: (s) => err.push(s) } };

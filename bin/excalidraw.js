@@ -67,7 +67,11 @@ ELEMENTS
 FIELDS (all optional unless noted above)
   label            {"text": "...", "fontSize": 20} or just "..." on shapes and
                    arrows; rendered as text centred in the shape / on the arrow.
-                   Use "\\n" for line breaks; labels are not wrapped for you.
+                   A group box (a shape fully containing another) puts its
+                   label top-left instead. Override with "textAlign" (left,
+                   center, right) and "verticalAlign" (top, middle, bottom)
+                   inside label. Use "\\n" for line breaks; labels are not
+                   wrapped for you.
   start, end       {"id": "<shape id>"} on arrows and lines. The arrow stays
                    attached when someone drags the shape in excalidraw.com.
                    MCP style also works: "startBinding": {"elementId": "<id>"}.
@@ -88,7 +92,10 @@ SIZING AND SPACING (rules of thumb, font size 20)
   - Ellipse needs ~1.4x that, diamond ~2x, in both directions.
   - Leave >= 120 px between shapes that an arrow joins, more if it has a label.
   - A large rectangle drawn first and fully containing others works as a group
-    box: full containment is fine, partial overlap is warned about.
+    box: full containment is fine, partial overlap is warned about. Give it a
+    "label" for its title (drawn top-left); do not fake one with a text
+    element, or the preview loses the group's name. Leave ~40 px above the
+    first row inside for the title.
   - Lay out on a grid: rows every ~150 px, columns every ~250 px.
 
 PREVIEW

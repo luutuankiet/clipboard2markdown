@@ -7,7 +7,7 @@
 
 import { measureText, containerFactor, TEXT_METRICS } from './edit.js';
 import { sceneToMermaid } from './scene-to-mermaid.js';
-import { bounds } from './scene-model.js';
+import { bounds, TUNING } from './scene-model.js';
 
 const SHAPES = new Set(['rectangle', 'ellipse', 'diamond']);
 const LINEAR = new Set(['arrow', 'line']);
@@ -16,6 +16,11 @@ const MCP_PSEUDO = new Set(['cameraUpdate', 'delete', 'restoreCheckpoint']);
 // Skeleton-only fields that must not leak into the scene.
 const SKELETON_FIELDS = ['label', 'start', 'end'];
 const BINDING_GAP = 4;
+// Excalidraw's own inset for bound text (BOUND_TEXT_PADDING); using the same
+// value means the editor does not move a title when the scene is opened.
+const BOUND_TEXT_PADDING = 5;
+const TEXT_ALIGNS = new Set(['left', 'center', 'right']);
+const VERTICAL_ALIGNS = new Set(['top', 'middle', 'bottom']);
 
 function randomInt() { return Math.floor(Math.random() * 2 ** 31); }
 
@@ -102,6 +107,42 @@ function fitLinear(el) {
   el.height = Math.max.apply(null, ys) - Math.min.apply(null, ys);
 }
 
+function pickAlign(fromLabel, fromShape, allowed) {
+  if (allowed.has(fromLabel)) return fromLabel;
+  if (allowed.has(fromShape)) return fromShape;
+  return null;
+}
+
+// Same test the Mermaid reader uses for a subgraph: the shape fully encloses
+// another shape and is bigger than it.
+function encloses(shape, shapes) {
+  var outer = { x: shape.x, y: shape.y, w: shape.width, h: shape.height };
+  return shapes.some(function (o) {
+    if (o === shape) return false;
+    var inner = { x: o.x, y: o.y, w: o.width, h: o.height };
+    var k = TUNING.containmentSlack;
+    return contains({ x: outer.x - k, y: outer.y - k, w: outer.w + 2 * k, h: outer.h + 2 * k }, inner) &&
+      outer.w * outer.h > inner.w * inner.h;
+  });
+}
+
+// Excalidraw's computeBoundTextPosition, so the text sits where the editor
+// itself would put it for this alignment.
+function placeInShape(t, shape) {
+  var ox = BOUND_TEXT_PADDING, oy = BOUND_TEXT_PADDING;
+  if (shape.type === 'ellipse') {
+    ox += (shape.width / 2) * (1 - Math.SQRT1_2);
+    oy += (shape.height / 2) * (1 - Math.SQRT1_2);
+  } else if (shape.type === 'diamond') {
+    ox += shape.width / 4;
+    oy += shape.height / 4;
+  }
+  var availW = shape.width - 2 * ox, availH = shape.height - 2 * oy;
+  var x0 = shape.x + ox, y0 = shape.y + oy;
+  t.x = t.textAlign === 'left' ? x0 : t.textAlign === 'right' ? x0 + availW - t.width : x0 + (availW - t.width) / 2;
+  t.y = t.verticalAlign === 'top' ? y0 : t.verticalAlign === 'bottom' ? y0 + availH - t.height : y0 + (availH - t.height) / 2;
+}
+
 // Throws on input that cannot become a scene at all; everything recoverable is
 // a warning instead, so the agent still gets a link.
 export function normalizeSkeleton(input) {
@@ -175,7 +216,11 @@ export function normalizeSkeleton(input) {
 
     var label = labelOf(raw);
     if (label && (SHAPES.has(raw.type) || LINEAR.has(raw.type))) {
-      labels.push({ container: el, text: String(label.text), fontSize: label.fontSize || raw.fontSize || 20, strokeColor: label.strokeColor || raw.strokeColor });
+      labels.push({
+        container: el, text: String(label.text), fontSize: label.fontSize || raw.fontSize || 20, strokeColor: label.strokeColor || raw.strokeColor,
+        textAlign: pickAlign(label.textAlign, raw.textAlign, TEXT_ALIGNS),
+        verticalAlign: pickAlign(label.verticalAlign, raw.verticalAlign, VERTICAL_ALIGNS),
+      });
     }
     elements.push(el);
     if (!byId.has(id)) byId.set(id, el);
@@ -211,17 +256,31 @@ export function normalizeSkeleton(input) {
     a.to = to;
   });
 
-  // Labels become bound text, centred in the shape or on the arrow's midpoint.
+  // Labels become bound text. A container (a shape that encloses another shape,
+  // which the Mermaid preview reads as a subgraph) gets its title in the top-left
+  // corner so it stays clear of the boxes inside; any other shape, and every
+  // arrow, gets its label centred. An explicit textAlign / verticalAlign wins.
+  var shapeEls = elements.filter(function (e) { return SHAPES.has(e.type); });
   var usedIds = new Set(elements.map(function (e) { return e.id; }));
   labels.forEach(function (l) {
     var id = l.container.id + '-label';
     for (var n = 2; usedIds.has(id); n++) id = l.container.id + '-label' + n;
     usedIds.add(id);
-    var t = textElement(id, l.text, l.fontSize, { textAlign: 'center', verticalAlign: 'middle', containerId: l.container.id });
+    var linear = LINEAR.has(l.container.type);
+    var isContainer = !linear && encloses(l.container, shapeEls);
+    var t = textElement(id, l.text, l.fontSize, {
+      textAlign: linear ? 'center' : l.textAlign || (isContainer ? 'left' : 'center'),
+      verticalAlign: linear ? 'middle' : l.verticalAlign || (isContainer ? 'top' : 'middle'),
+      containerId: l.container.id,
+    });
     if (l.strokeColor) t.strokeColor = l.strokeColor;
-    var c = LINEAR.has(l.container.type) ? arrowMidpoint(l.container) : centre(l.container);
-    t.x = c[0] - t.width / 2;
-    t.y = c[1] - t.height / 2;
+    if (linear) {
+      var c = arrowMidpoint(l.container);
+      t.x = c[0] - t.width / 2;
+      t.y = c[1] - t.height / 2;
+    } else {
+      placeInShape(t, l.container);
+    }
     addBound(l.container, { id: id, type: 'text' });
     elements.push(t);
   });
