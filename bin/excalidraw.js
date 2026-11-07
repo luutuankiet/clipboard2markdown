@@ -39,7 +39,7 @@ LOOP
 INPUT: a JSON array of elements
   [
     {"id": "api",  "type": "rectangle", "x": 0,   "y": 0, "width": 160, "height": 70,
-     "label": {"text": "API"}, "backgroundColor": "#a5d8ff"},
+     "label": {"text": "API"}},
     {"id": "db",   "type": "ellipse",   "x": 300, "y": 0, "width": 200, "height": 80,
      "label": {"text": "Postgres"}},
     {"id": "ok",   "type": "diamond",   "x": 280, "y": 180, "width": 240, "height": 120,
@@ -97,6 +97,19 @@ SIZING AND SPACING (rules of thumb, font size 20)
     element, or the preview loses the group's name. Leave ~40 px above the
     first row inside for the title.
   - Lay out on a grid: rows every ~150 px, columns every ~250 px.
+
+STYLE (the default look; the user's own styling instructions win)
+  1. Plan all white: every node #ffffff solid fill, #1e1e1e stroke, default
+     width, roughness and font. Group boxes: thin grey stroke (#868e96, width
+     1) and a "label" title. Fix layout, text and arrows here; never deliver it.
+  2. Deliver a highlight pass: same positions, text and arrows. Change only
+     fill colour, fillStyle, dashed strokes or shape, to mark the point.
+  Colour means emphasis only, no fixed palette, at most 3 colours. One
+  highlighted node is fine. Add a key (labelled boxes no arrow touches, at the
+  top or right) whenever a colour or dash carries meaning.
+  Arrow labels: optional, at most 2 words, no ids, brackets or line breaks.
+  Full guide with examples:
+  https://github.com/luutuankiet/clipboard2markdown/blob/master/docs/reference/diagram-style.md
 
 PREVIEW
   rectangle -> id[label]   ellipse -> id((label))   diamond -> id{label}
