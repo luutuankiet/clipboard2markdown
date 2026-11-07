@@ -22,14 +22,25 @@ const BOUND_TEXT_PADDING = 5;
 const TEXT_ALIGNS = new Set(['left', 'center', 'right']);
 const VERTICAL_ALIGNS = new Set(['top', 'middle', 'bottom']);
 
-function randomInt() { return Math.floor(Math.random() * 2 ** 31); }
+// FNV-1a over the element id. `seed` drives the hand-drawn wobble, so deriving
+// it from the id makes the same diagram draw the same way on every run; a
+// random seed made two renders of one diagram not line up. Never 0: rough.js
+// falls back to Math.random for a zero seed.
+function seedFromId(id, salt) {
+  var s = salt + String(id), h = 0x811c9dc5;
+  for (var i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return ((h >>> 0) % 2147483646) + 1;
+}
 
 function base(type, id) {
   return {
     id: id, type: type, x: 0, y: 0, width: 0, height: 0, angle: 0,
     strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'solid', strokeWidth: 2,
     strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [], frameId: null, roundness: null,
-    seed: randomInt(), version: 1, versionNonce: randomInt(), isDeleted: false, boundElements: null,
+    seed: seedFromId(id, ''), version: 1, versionNonce: seedFromId(id, 'nonce:'), isDeleted: false, boundElements: null,
     updated: Date.now(), link: null, locked: false,
   };
 }

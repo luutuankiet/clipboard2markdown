@@ -94,6 +94,23 @@ describe('c2m excalidraw skeleton', () => {
     expect(warnings).toEqual([]);
   });
 
+  it('derives seeds from ids so the same diagram draws the same twice; an explicit seed wins', () => {
+    const input = () => [
+      box('a', 0, 0), box('b', 400, 0, { seed: 12345 }),
+      { id: 'e', type: 'arrow', start: { id: 'a' }, end: { id: 'b' }, label: 'reads' },
+      { id: 'n', type: 'text', x: 0, y: 200, text: 'note' },
+    ];
+    const first = byId(buildSkeleton(input()).scene);
+    const second = byId(buildSkeleton(input()).scene);
+    for (const id of ['a', 'a-label', 'b-label', 'e', 'e-label', 'n']) {
+      expect(first[id].seed).toBe(second[id].seed);
+      expect(first[id].versionNonce).toBe(second[id].versionNonce);
+      expect(Number.isInteger(first[id].seed) && first[id].seed > 0).toBe(true);
+    }
+    expect(first.b.seed).toBe(12345);
+    expect(new Set(['a', 'a-label', 'e', 'e-label', 'n'].map((id) => first[id].seed)).size).toBe(5);
+  });
+
   it('rejects input that is not an element array, without printing a link', async () => {
     const out = [], err = [];
     const io = { stdout: { write: (s) => out.push(s) }, stderr: { write: (s) => err.push(s) } };
