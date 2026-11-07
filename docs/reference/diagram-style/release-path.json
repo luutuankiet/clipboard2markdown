@@ -1,0 +1,23 @@
+[
+  {"id": "key_human", "type": "rectangle", "x": 1680, "y": -180, "width": 260, "height": 60, "label": {"text": "A human acts"}, "backgroundColor": "#ffec99", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "dev", "type": "rectangle", "x": 0, "y": 0, "width": 260, "height": 90, "label": {"text": "Developer opens\npull request"}, "backgroundColor": "#ffec99", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "lint", "type": "rectangle", "x": 420, "y": 0, "width": 260, "height": 90, "label": {"text": "CI lint"}, "backgroundColor": "#ffffff", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "build", "type": "rectangle", "x": 840, "y": 0, "width": 260, "height": 90, "label": {"text": "CI build into\nPR dataset"}, "backgroundColor": "#ffffff", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "review", "type": "rectangle", "x": 1260, "y": 0, "width": 260, "height": 90, "label": {"text": "Code review"}, "backgroundColor": "#ffec99", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "merge", "type": "rectangle", "x": 1680, "y": 0, "width": 260, "height": 90, "label": {"text": "Merge to main"}, "backgroundColor": "#ffec99", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "image", "type": "rectangle", "x": 1680, "y": 300, "width": 260, "height": 90, "label": {"text": "Image build"}, "backgroundColor": "#ffffff", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "deploy", "type": "rectangle", "x": 1260, "y": 300, "width": 260, "height": 90, "label": {"text": "Deploy to\nscheduler"}, "backgroundColor": "#ffffff", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "nightly", "type": "rectangle", "x": 840, "y": 300, "width": 260, "height": 90, "label": {"text": "Nightly\nprod run"}, "backgroundColor": "#ffffff", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "tests", "type": "rectangle", "x": 420, "y": 300, "width": 260, "height": 90, "label": {"text": "Data tests"}, "backgroundColor": "#ffffff", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "oncall", "type": "rectangle", "x": 0, "y": 300, "width": 260, "height": 90, "label": {"text": "On-call person"}, "backgroundColor": "#ffec99", "fillStyle": "solid", "strokeColor": "#1e1e1e"},
+  {"id": "a1", "type": "arrow", "start": {"id": "dev"}, "end": {"id": "lint"}, "strokeColor": "#1e1e1e"},
+  {"id": "a2", "type": "arrow", "start": {"id": "lint"}, "end": {"id": "build"}, "strokeColor": "#1e1e1e"},
+  {"id": "a3", "type": "arrow", "start": {"id": "build"}, "end": {"id": "review"}, "strokeColor": "#1e1e1e", "label": {"text": "passes"}},
+  {"id": "a4", "type": "arrow", "start": {"id": "review"}, "end": {"id": "merge"}, "strokeColor": "#1e1e1e", "label": {"text": "approves"}},
+  {"id": "a5", "type": "arrow", "start": {"id": "merge"}, "end": {"id": "image"}, "strokeColor": "#1e1e1e"},
+  {"id": "a6", "type": "arrow", "start": {"id": "image"}, "end": {"id": "deploy"}, "strokeColor": "#1e1e1e"},
+  {"id": "a7", "type": "arrow", "start": {"id": "deploy"}, "end": {"id": "nightly"}, "strokeColor": "#1e1e1e"},
+  {"id": "a8", "type": "arrow", "start": {"id": "nightly"}, "end": {"id": "tests"}, "strokeColor": "#1e1e1e"},
+  {"id": "a9", "type": "arrow", "start": {"id": "tests"}, "end": {"id": "oncall"}, "strokeColor": "#1e1e1e", "label": {"text": "fails"}},
+  {"id": "a10", "type": "arrow", "start": {"id": "build"}, "end": {"id": "dev"}, "strokeColor": "#1e1e1e", "label": {"text": "fails"}, "x": 970, "y": 0, "points": [[0, 0], [0, -80], [-840, -80], [-840, 0]]}
+]

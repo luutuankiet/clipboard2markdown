@@ -39,6 +39,7 @@ Simply true, and expensive to re-derive.
 | page | summary | verified |
 |---|---|---|
 | [Annotation style contract](reference/annotation-style-contract.md) | How conversational platforms (Jira, Slack, Google Chat) annotate thread boundaries and metadata in converted Markdown | 2026-09-16 |
+| [Diagram style](reference/diagram-style.md) | The default look for diagrams drawn with c2m excalidraw - plan all white, then highlight only what makes the point | 2026-11-07 |
 
 ## Decisions
 

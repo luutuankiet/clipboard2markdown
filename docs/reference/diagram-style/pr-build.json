@@ -1,0 +1,20 @@
+[
+  {"id": "key_rebuilt", "type": "rectangle", "x": 0, "y": 0, "width": 240, "height": 50, "backgroundColor": "#ffec99", "fillStyle": "solid", "label": {"text": "rebuilt by PR"}},
+  {"id": "raw", "type": "rectangle", "x": 0, "y": 100, "width": 300, "height": 500, "backgroundColor": "#ffffff", "fillStyle": "solid", "strokeColor": "#868e96", "strokeWidth": 1, "label": {"text": "dwh-raw"}},
+  {"id": "dev", "type": "rectangle", "x": 360, "y": 100, "width": 940, "height": 180, "backgroundColor": "#ffffff", "fillStyle": "solid", "strokeColor": "#868e96", "strokeWidth": 1, "label": {"text": "dwh-dev: pr_123"}},
+  {"id": "transform", "type": "rectangle", "x": 360, "y": 420, "width": 300, "height": 180, "backgroundColor": "#ffffff", "fillStyle": "solid", "strokeColor": "#868e96", "strokeWidth": 1, "label": {"text": "dwh-transform"}},
+  {"id": "marts", "type": "rectangle", "x": 1000, "y": 420, "width": 300, "height": 180, "backgroundColor": "#ffffff", "fillStyle": "solid", "strokeColor": "#868e96", "strokeWidth": 1, "label": {"text": "dwh-marts"}},
+  {"id": "orders_raw", "type": "rectangle", "x": 40, "y": 180, "width": 220, "height": 60, "backgroundColor": "#ffffff", "fillStyle": "solid", "label": {"text": "orders_raw"}},
+  {"id": "customers_raw", "type": "rectangle", "x": 40, "y": 500, "width": 220, "height": 60, "backgroundColor": "#ffffff", "fillStyle": "solid", "label": {"text": "customers_raw"}},
+  {"id": "stg_orders", "type": "rectangle", "x": 400, "y": 180, "width": 220, "height": 60, "backgroundColor": "#ffec99", "fillStyle": "solid", "label": {"text": "stg_orders"}},
+  {"id": "int_orders", "type": "rectangle", "x": 720, "y": 180, "width": 220, "height": 60, "backgroundColor": "#ffec99", "fillStyle": "solid", "label": {"text": "int_orders"}},
+  {"id": "fct_orders", "type": "rectangle", "x": 1040, "y": 180, "width": 220, "height": 60, "backgroundColor": "#ffec99", "fillStyle": "solid", "label": {"text": "fct_orders"}},
+  {"id": "stg_customers", "type": "rectangle", "x": 400, "y": 500, "width": 220, "height": 60, "backgroundColor": "#ffffff", "fillStyle": "solid", "label": {"text": "stg_customers"}},
+  {"id": "dim_customer", "type": "rectangle", "x": 1040, "y": 500, "width": 220, "height": 60, "backgroundColor": "#ffffff", "fillStyle": "solid", "label": {"text": "dim_customer"}},
+  {"id": "a1", "type": "arrow", "start": {"id": "orders_raw"}, "end": {"id": "stg_orders"}},
+  {"id": "a2", "type": "arrow", "start": {"id": "customers_raw"}, "end": {"id": "stg_customers"}},
+  {"id": "a3", "type": "arrow", "start": {"id": "stg_orders"}, "end": {"id": "int_orders"}},
+  {"id": "a4", "type": "arrow", "start": {"id": "int_orders"}, "end": {"id": "fct_orders"}},
+  {"id": "a5", "type": "arrow", "start": {"id": "stg_customers"}, "end": {"id": "int_orders"}, "label": {"text": "reads"}},
+  {"id": "a6", "type": "arrow", "start": {"id": "stg_customers"}, "end": {"id": "dim_customer"}}
+]
