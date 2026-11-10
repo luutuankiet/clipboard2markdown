@@ -1,0 +1,4 @@
+[
+  {"id": "api", "type": "rectangle", "x": 0, "y": 0, "width": 160, "height": 70, "label": "API"},
+  {"id": "db", "type": "rectangle", "x": 170, "y": 0, "width": 160, "height": 70, "label": "DB"}
+]

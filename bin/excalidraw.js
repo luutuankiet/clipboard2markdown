@@ -33,7 +33,8 @@ LOOP
   1. Write the diagram JSON to a file.
   2. Run: c2m excalidraw diagram.json --no-upload
   3. Read the preview: is every box, arrow and label what you meant?
-     Read the warnings: overlaps, labels that do not fit, loose arrows.
+     Read the warnings: overlaps, labels that do not fit, crowded shapes,
+     crossing arrows, loose arrows.
   4. Fix the JSON and rerun until the preview is right and warnings are gone.
   5. Run without --no-upload and paste the link into the document.
   Every upload makes a new link; old links keep working. The encryption key
@@ -123,6 +124,8 @@ PREVIEW
 WARNINGS
   overlap            two shapes partly overlap
   label does not fit the label's estimated size exceeds its shape minus padding
+  px apart          two shapes sit closer than 30 px, edge to edge
+  cross              two arrows cross that share no shape
   not attached       an arrow end has no "start"/"end"
   points at "<id>"   an arrow end names an id that is not a shape here
   duplicate id       bindings attach to the first element with that id

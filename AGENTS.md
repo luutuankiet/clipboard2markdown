@@ -64,6 +64,7 @@ tests/                      Fixture-based regression suite
   fixtures-diagrams/        Synthetic .excalidraw scenes + expected .mmd
   fixtures-diagram-md/      <name>.input.md / <name>.expected.md pairs
   fixtures-png/             Fixed-seed scene + known-good Excalifont render for --png
+  fixtures-layout/          One scene per layout warning, plus a clean one that warns about nothing
 docs/                       Project documentation
 scripts/gen-docs-index.sh   Regenerates docs/README.md index
 ```

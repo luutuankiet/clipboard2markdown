@@ -7,7 +7,7 @@
 
 import { measureText, containerFactor, TEXT_METRICS } from './edit.js';
 import { sceneToMermaid } from './scene-to-mermaid.js';
-import { bounds, TUNING } from './scene-model.js';
+import { absolutePoints, bounds, TUNING } from './scene-model.js';
 
 const SHAPES = new Set(['rectangle', 'ellipse', 'diamond']);
 const LINEAR = new Set(['arrow', 'line']);
@@ -324,6 +324,36 @@ function contains(outer, inner) {
   return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h;
 }
 
+// Shapes closer than this, edge to edge, read as one blob at document width.
+// Well under the 120 px the help asks for between joined shapes, so only a
+// layout that is clearly cramped is warned about.
+export const CROWDED_GAP = 30;
+
+// Edge-to-edge distance between two boxes that do not overlap.
+function gapBetween(a, b) {
+  var dx = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.w, b.x + b.w));
+  var dy = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.h, b.y + b.h));
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Do segments p1-p2 and q1-q2 cross at a point inside both? Touching or
+// collinear segments do not count.
+function segmentsCross(p1, p2, q1, q2) {
+  function side(a, b, c) { return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]); }
+  var d1 = side(q1, q2, p1), d2 = side(q1, q2, p2), d3 = side(p1, p2, q1), d4 = side(p1, p2, q2);
+  return d1 * d2 < 0 && d3 * d4 < 0;
+}
+
+function pathsCross(a, b) {
+  var pa = absolutePoints(a), pb = absolutePoints(b);
+  for (var i = 0; i + 1 < pa.length; i++) {
+    for (var j = 0; j + 1 < pb.length; j++) {
+      if (segmentsCross(pa[i], pa[i + 1], pb[j], pb[j + 1])) return true;
+    }
+  }
+  return false;
+}
+
 export function lintSkeleton(normalized) {
   var warnings = [];
   var elements = normalized.scene.elements;
@@ -341,6 +371,12 @@ export function lintSkeleton(normalized) {
       var a = box(shapes[i]), b = box(shapes[j]);
       if (overlapArea(a, b) && !contains(a, b) && !contains(b, a)) {
         warnings.push('"' + shapes[i].id + '" and "' + shapes[j].id + '" overlap; move them apart or nest one fully inside the other');
+      } else if (SHAPES.has(shapes[i].type) && SHAPES.has(shapes[j].type) && !overlapArea(a, b)) {
+        var gap = gapBetween(a, b);
+        if (gap < CROWDED_GAP) {
+          warnings.push('"' + shapes[i].id + '" and "' + shapes[j].id + '" are ' + Math.round(gap) + ' px apart; leave at least ' +
+            CROWDED_GAP + ' px (120 px if an arrow joins them)');
+        }
       }
     }
   }
@@ -373,6 +409,20 @@ export function lintSkeleton(normalized) {
       }
     });
   });
+
+  // Two arrows that share a shape meet there by design; only a crossing
+  // between unrelated arrows is a tangle.
+  var arrows = normalized.arrows.filter(function (a) { return a.el.type === 'arrow' || a.el.type === 'line'; });
+  for (var x = 0; x < arrows.length; x++) {
+    for (var y = x + 1; y < arrows.length; y++) {
+      var p = arrows[x], q = arrows[y];
+      var ends = [p.from, p.to].filter(Boolean);
+      if ([q.from, q.to].some(function (e) { return e && ends.indexOf(e) !== -1; })) continue;
+      if (pathsCross(p.el, q.el)) {
+        warnings.push('arrows "' + p.el.id + '" and "' + q.el.id + '" cross; move a shape or route one around with "points"');
+      }
+    }
+  }
 
   return warnings;
 }
