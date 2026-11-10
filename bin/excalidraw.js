@@ -150,7 +150,8 @@ PNG (for pasting into a Google Doc): one command, then one write
     \`\`\`mermaid ...\`\`\`                         the preview, as above
     ![<name>](attach:<name>)                  the image line (--png)
     ![<name>](./images/<name>.png)            the image line (--out .../images/)
-    [Edit this diagram](<share link>)         omitted with --no-upload
+    Edit: <share link>                        the link line, shown as text under
+                                              the image; omitted with --no-upload
     "<name>": "@file64:/abs/path/<name>.png"  the images map entry (--png only)
     warning: ...                              as above, if any
   --png: write the image line with edit_doc or create_doc, mapping <name> to
@@ -321,7 +322,10 @@ async function runPng(targets, opts, io) {
     var lines = [];
     if (it.preview) lines.push('```mermaid\n' + it.preview + '\n```');
     lines.push('![' + it.name + '](' + target + ')');
-    if (url) lines.push('[Edit this diagram](' + url + ')');
+    // The share link sits as a plain text line under the image, so it shows in
+    // the doc: no API request sets an image's alt text, and a link hidden
+    // behind words is easy to miss.
+    if (url) lines.push('Edit: ' + url);
     if (!opts.folder) lines.push(JSON.stringify(it.name) + ': ' + JSON.stringify('@file64:' + file));
     if (reviewFile) lines.push('review: ' + reviewFile);
     warnings.forEach(function (w) { lines.push('warning: ' + w); });

@@ -73,7 +73,7 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     expect(pngSize(fs.readFileSync(path.join(out, 'flow.png'))).width).toBe(1860);
 
     const abs = path.resolve(out, 'flow.png');
-    expect(r.stdout).toContain('![flow](attach:flow)\n[Edit this diagram](https://excalidraw.com/#json=fake0001,');
+    expect(r.stdout).toContain('![flow](attach:flow)\nEdit: https://excalidraw.com/#json=fake0001,');
     expect(r.stdout).toContain('"flow": "@file64:' + abs + '"\nreview: ' + path.resolve(out, 'flow.review.png') + '\n');
     expect(r.stdout).toContain('![single](attach:single)');
     expect(backend.requests.map((q) => q.method)).toEqual(['POST', 'POST']);
@@ -91,7 +91,7 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     expect(doc.width * doc.height).toBeLessThanOrEqual(25000000);
     expect(doc.width * doc.height).toBeGreaterThan(24000000);
     expect(r.stdout).toMatch(/warning: drawn at scale 1\.\d+ to stay under 25,000,000 pixels/);
-    expect(r.stdout).not.toContain('Edit this diagram');
+    expect(r.stdout).not.toMatch(/^Edit: /m);
   });
 
   it('cleans only old PNGs in the cache folder, never scene JSON, subfolders or a named folder', async () => {
@@ -187,7 +187,7 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     expect(pngSize(fs.readFileSync(path.join(out, 'shorthand.png'))).width).toBe(1860);
 
     const { loadScene } = await import('../../src/diagrams/share-link.js');
-    const url = r.stdout.match(/\[Edit this diagram\]\((.*)\)/)[1];
+    const url = r.stdout.match(/^Edit: (https:\/\/excalidraw\.com\/\S+)$/m)[1];
     const els = (await loadScene(url, { fetch: backend.fetch })).elements;
     const arrow = els.find((e) => e.id === 'e');
     expect(arrow.points).toHaveLength(2);
@@ -205,7 +205,7 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     expect(r.stderr).toBe('');
     expect(r.code).toBe(0);
     const { loadScene } = await import('../../src/diagrams/share-link.js');
-    const url = r.stdout.match(/\[Edit this diagram\]\((.*)\)/)[1];
+    const url = r.stdout.match(/^Edit: (https:\/\/excalidraw\.com\/\S+)$/m)[1];
     const uploaded = await loadScene(url, { fetch: backend.fetch });
     expect(uploaded.elements).toEqual(JSON.parse(fs.readFileSync(input, 'utf8')).elements);
   });
@@ -221,7 +221,7 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     expect(fs.existsSync(path.join(out, 'flow.review.png'))).toBe(false);
     expect(r.stdout).toContain('```mermaid\nflowchart LR\n');
     expect(r.stdout).toContain('api -->|reads| db');
-    expect(r.stdout).toContain('![flow](attach:flow)\n[Edit this diagram](https://excalidraw.com/#json=fake0001,');
+    expect(r.stdout).toContain('![flow](attach:flow)\nEdit: https://excalidraw.com/#json=fake0001,');
     expect(r.stdout).toContain('"flow": "@file64:' + path.resolve(out, 'flow.png') + '"\n');
     expect(r.stdout).not.toMatch(/review/i);
   });
@@ -235,7 +235,7 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     expect(r.code).toBe(0);
     expect(fs.readdirSync(images)).toEqual(['request-flow.png']);
     expect(r.stdout).toContain('```mermaid\n');
-    expect(r.stdout).toContain('![request-flow](./images/request-flow.png)\n[Edit this diagram](https://excalidraw.com/#json=fake0001,');
+    expect(r.stdout).toContain('![request-flow](./images/request-flow.png)\nEdit: https://excalidraw.com/#json=fake0001,');
     expect(r.stdout).not.toContain('@file64:');
     expect(r.stdout).not.toMatch(/review/i);
   });
