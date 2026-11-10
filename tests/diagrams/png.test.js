@@ -56,7 +56,7 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     const a = write('flow.json', twoBoxes);
     const b = write('single.json', [twoBoxes[0]]);
     const out = path.join(tmp, 'named');
-    const r = await run(['--png', out, a, b], { fetch: backend.fetch });
+    const r = await run(['--png', out, '--review', a, b], { fetch: backend.fetch });
     expect(r.stderr).toBe('');
     expect(r.code).toBe(0);
 
@@ -76,7 +76,6 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     expect(r.stdout).toContain('![flow](attach:flow)\n[Edit this diagram](https://excalidraw.com/#json=fake0001,');
     expect(r.stdout).toContain('"flow": "@file64:' + abs + '"\nreview: ' + path.resolve(out, 'flow.review.png') + '\n');
     expect(r.stdout).toContain('![single](attach:single)');
-    expect(r.stdout).toMatch(/Mermaid preview first/);
     expect(backend.requests.map((q) => q.method)).toEqual(['POST', 'POST']);
     expect(requests).toEqual([]);
   });
@@ -134,7 +133,7 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     expect(fs.existsSync(path.join(renders, 'sub'))).toBe(true);
     expect(fs.existsSync(files.namedOld)).toBe(true);
     expect(fs.existsSync(input)).toBe(true);
-    expect(fs.existsSync(path.join(renders, 'cached.review.png'))).toBe(true);
+    expect(fs.existsSync(path.join(renders, 'cached.review.png'))).toBe(false);
   });
 
   it('draws labels in Excalifont, not a fallback font', async () => {
@@ -142,7 +141,7 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     // so a scene built fresh would never match the reference pixel for pixel.
     const input = path.join(root, 'tests/fixtures-png/excalifont-label.excalidraw');
     const out = path.join(tmp, 'font');
-    const r = await run(['--png', out, '--no-upload', input]);
+    const r = await run(['--png', out, '--review', '--no-upload', input]);
     expect(r.code).toBe(0);
     const got = fs.readFileSync(path.join(out, 'excalifont-label.review.png'));
     if (process.env.UPDATE_PNG_FIXTURES) fs.writeFileSync(REFERENCE, got);
@@ -209,6 +208,46 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     const url = r.stdout.match(/\[Edit this diagram\]\((.*)\)/)[1];
     const uploaded = await loadScene(url, { fetch: backend.fetch });
     expect(uploaded.elements).toEqual(JSON.parse(fs.readFileSync(input, 'utf8')).elements);
+  });
+
+  it('prints the preview and a paste block per diagram, and writes no review PNG by default', async () => {
+    const backend = createFakeBackend();
+    const a = write('flow.json', twoBoxes);
+    const out = path.join(tmp, 'live');
+    const r = await run(['--png', out, a], { fetch: backend.fetch });
+    expect(r.stderr).toBe('');
+    expect(r.code).toBe(0);
+    expect(fs.existsSync(path.join(out, 'flow.png'))).toBe(true);
+    expect(fs.existsSync(path.join(out, 'flow.review.png'))).toBe(false);
+    expect(r.stdout).toContain('```mermaid\nflowchart LR\n');
+    expect(r.stdout).toContain('api -->|reads| db');
+    expect(r.stdout).toContain('![flow](attach:flow)\n[Edit this diagram](https://excalidraw.com/#json=fake0001,');
+    expect(r.stdout).toContain('"flow": "@file64:' + path.resolve(out, 'flow.png') + '"\n');
+    expect(r.stdout).not.toMatch(/review/i);
+  });
+
+  it('with --out <folder>/images/ writes the PNG there and prints a relative image line', async () => {
+    const backend = createFakeBackend();
+    const a = write('request-flow.json', twoBoxes);
+    const images = path.join(tmp, 'work', 'images') + path.sep;
+    const r = await run([a, '--out', images], { fetch: backend.fetch });
+    expect(r.stderr).toBe('');
+    expect(r.code).toBe(0);
+    expect(fs.readdirSync(images)).toEqual(['request-flow.png']);
+    expect(r.stdout).toContain('```mermaid\n');
+    expect(r.stdout).toContain('![request-flow](./images/request-flow.png)\n[Edit this diagram](https://excalidraw.com/#json=fake0001,');
+    expect(r.stdout).not.toContain('@file64:');
+    expect(r.stdout).not.toMatch(/review/i);
+  });
+
+  it('writes the review PNG only with --review', async () => {
+    const a = write('asked.json', [twoBoxes[0]]);
+    const out = path.join(tmp, 'asked-out');
+    const r = await run(['--png', out, '--review', '--no-upload', a]);
+    expect(r.code).toBe(0);
+    const review = path.resolve(out, 'asked.review.png');
+    expect(Math.max(...Object.values(pngSize(fs.readFileSync(review))))).toBeLessThanOrEqual(1000);
+    expect(r.stdout).toContain('review: ' + review + '\n');
   });
 
   it('refuses two inputs with the same name before drawing anything', async () => {

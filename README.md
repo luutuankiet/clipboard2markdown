@@ -63,9 +63,10 @@ The Mermaid is deliberately lossy: positions, colours, fonts and arrow curves ar
 ```bash
 c2m excalidraw --png a.json b.json          # PNGs in ~/.cache/c2m/renders/
 c2m excalidraw --png out/ a.json            # PNGs in out/
+c2m excalidraw --out work/images/ a.json    # into a working copy: ![a](./images/a.png)
 ```
 
-Per diagram it writes `<name>.png` (scale 3, lowered until the image has at most 25,000,000 pixels, Google Docs' limit) and `<name>.review.png` (at most 1000 px on the long side), then prints an image line `![<name>](attach:<name>)`, an `[Edit this diagram](<share link>)` line and the images map entry `"<name>": "@file64:/abs/path/<name>.png"`. Review agents should read the Mermaid preview first and open the review PNG only when the preview is not enough. Each run first deletes PNGs older than 24 hours in the default cache folder; a folder you name is never cleaned. CJK text is not drawn, because the 13 MB CJK font is left out of the package; such diagrams get a warning.
+Per diagram it writes `<name>.png` (scale 3, lowered until the image has at most 25,000,000 pixels, Google Docs' limit), then prints the Mermaid preview, any warnings, an image line `![<name>](attach:<name>)`, an `[Edit this diagram](<share link>)` line and the images map entry `"<name>": "@file64:/abs/path/<name>.png"`. With `--out <folder>/images/` instead of `--png`, the PNG goes into that folder and the image line reads `![<name>](./images/<name>.png)`, ready for a working copy. No review PNG is written unless you pass `--review`; the preview and warnings are the check. Each run first deletes PNGs older than 24 hours in the default cache folder; a folder you name is never cleaned. CJK text is not drawn, because the 13 MB CJK font is left out of the package; such diagrams get a warning.
 
 ## Demo
 
