@@ -31,3 +31,4 @@ The package version comes from the tag, so `package.json` doesn't need a bump fi
 | [v0.4.0](v0.4.0.md) | 2026-11-05 | `c2m excalidraw --png` draws diagrams as PNG locally |
 | [v0.4.1](v0.4.1.md) | 2026-11-05 | `--png` accepts the shorthand inside a whole scene |
 | [v0.5.0](v0.5.0.md) | 2026-11-07 | diagram house style; group titles top-left; stable seeds |
+| [v0.6.0](v0.6.0.md) | 2026-11-10 | one-command paste block with an `Edit: <url>` line; `style` op; crowded and crossing warnings |
