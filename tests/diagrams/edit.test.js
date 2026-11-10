@@ -168,4 +168,40 @@ describe('editLink', () => {
   it('rejects a duplicate id on add', async () => {
     await expect(run('01-bound-arrows', [{ op: 'add', id: 'auth', label: 'x', near: 'gateway' }])).rejects.toThrow(/already exists/);
   });
+
+  it('style colours the matched node only', async () => {
+    const { after, original } = await run('01-bound-arrows', [{ op: 'style', nodes: ['auth'], set: { backgroundColor: '#ffec99', strokeColor: '#e03131', strokeStyle: 'dashed' } }]);
+    const box = after.elements.find((e) => e.id === 'auth');
+    expect(box.backgroundColor).toBe('#ffec99');
+    expect(box.strokeColor).toBe('#e03131');
+    expect(box.strokeStyle).toBe('dashed');
+    expectUntouched(original, after, ['auth']);
+  });
+
+  it('style sets font keys on the labels of every arrow matched by type', async () => {
+    const { after, original } = await run('01-bound-arrows', [{ op: 'style', type: 'arrow', set: { strokeWidth: 4, fontFamily: 2, textColor: '#1971c2' } }]);
+    ['a1', 'a2'].forEach((id) => {
+      expect(after.elements.find((e) => e.id === id).strokeWidth).toBe(4);
+      const label = after.elements.find((e) => e.id === id + '_label');
+      expect(label.fontFamily).toBe(2);
+      expect(label.strokeColor).toBe('#1971c2');
+    });
+    expectUntouched(original, after, ['a1', 'a1_label', 'a2', 'a2_label']);
+  });
+
+  it('style with a larger font refits the label inside its box', async () => {
+    const { after } = await run('01-bound-arrows', [{ op: 'style', nodes: ['auth'], set: { fontSize: 36 } }]);
+    const box = after.elements.find((e) => e.id === 'auth');
+    const text = after.elements.find((e) => e.id === 'auth_label');
+    expect(text.fontSize).toBe(36);
+    expect(text.x).toBeGreaterThanOrEqual(box.x);
+    expect(text.x + text.width).toBeLessThanOrEqual(box.x + box.width);
+  });
+
+  it('style refuses an unknown key, an empty filter and a filter that matches nothing', async () => {
+    await expect(run('01-bound-arrows', [{ op: 'style', nodes: ['auth'], set: { colour: 'red' } }])).rejects.toThrow(/unknown style key "colour"/);
+    await expect(run('01-bound-arrows', [{ op: 'style', set: { strokeWidth: 2 } }])).rejects.toThrow(/needs "nodes", "type" or both/);
+    await expect(run('01-bound-arrows', [{ op: 'style', type: 'ellipse', set: { strokeWidth: 2 } }])).rejects.toThrow(/matches no element/);
+    await expect(run('01-bound-arrows', [{ op: 'style', nodes: ['nope'], set: { strokeWidth: 2 } }])).rejects.toThrow(/unknown node or subgraph "nope"/);
+  });
 });

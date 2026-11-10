@@ -21,13 +21,22 @@ const USAGE = `usage: c2m diagrams <command> [options]
   strip <file.md> [--write]      remove every generated block
   show <url|file.excalidraw>     print the Mermaid for one diagram
   edit <url|file.excalidraw> (--ops '<json>' | --ops-file <path>)
-       [--show-mermaid] [--out file.excalidraw] [--no-upload]
+       [--show-mermaid] [--out file.excalidraw|file.png] [--no-upload]
                                  apply edit ops, upload, print the new link
-                                 (--no-upload prints the resulting Mermaid instead)
+                                 (--no-upload prints the resulting Mermaid instead;
+                                 --out *.png draws the edited diagram, doc-ready)
 
 ops: [{"op":"rename","node","label"}, {"op":"add","id","label","near","side"?},
       {"op":"connect","from","to","label"?,"dashed"?}, {"op":"disconnect","from","to"},
-      {"op":"relabel-edge","from","to","label"}, {"op":"remove","node"}]
+      {"op":"relabel-edge","from","to","label"}, {"op":"remove","node"},
+      {"op":"style","nodes"?:[ids],"type"?,"set":{...}}]
+
+style: pick elements by "nodes" (Mermaid ids), "type" (rectangle, ellipse,
+  diamond, arrow, line, text, ...) or both. "set" keys: strokeColor,
+  backgroundColor, strokeWidth, strokeStyle (solid|dashed|dotted), fillStyle
+  (hachure|cross-hatch|solid|zigzag), roughness, opacity go on the shape or
+  arrow; textColor, fontFamily, fontSize go on its label. A larger font
+  refits the label in its box.
 `;
 
 // Test hook: a directory standing in for json.excalidraw.com. GET reads
@@ -133,7 +142,16 @@ export async function main(argv, io) {
       stderr.write('warning: embedded images do not carry over to a new share link; excalidraw.com will show placeholders until they are re-inserted (docs/traps/EDITED_LINK_LOSES_IMAGES.md)\n');
     }
     edited.report.forEach(function (line) { stderr.write(line + '\n'); });
-    if (args.out) fs.writeFileSync(args.out, JSON.stringify(edited.scene, null, 2) + '\n');
+    if (args.out && /\.png$/i.test(args.out)) {
+      // Lazy: the renderer loads jsdom and Excalidraw, which the other commands never need.
+      var render = await import('../src/excalidraw-png.js');
+      var drawn = await render.renderScene(edited.scene);
+      fs.mkdirSync(path.dirname(path.resolve(args.out)), { recursive: true });
+      fs.writeFileSync(args.out, drawn.png);
+      stderr.write('wrote ' + args.out + (drawn.scale < 3 ? ' (drawn at scale ' + drawn.scale + ' to stay under 25,000,000 pixels)' : '') + '\n');
+    } else if (args.out) {
+      fs.writeFileSync(args.out, JSON.stringify(edited.scene, null, 2) + '\n');
+    }
     if (args['show-mermaid']) stderr.write(edited.mermaid + '\n');
     stdout.write((args['no-upload'] ? edited.mermaid : edited.url) + '\n');
     return 0;

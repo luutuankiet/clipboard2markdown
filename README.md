@@ -44,9 +44,14 @@ c2m diagrams expand doc.md [--write]      # same output as the page
 c2m diagrams strip doc.md [--write]
 c2m diagrams show '<share url>'           # or a local .excalidraw file
 c2m diagrams edit '<share url>' --ops '[{"op":"rename","node":"auth","label":"Identity"}]'
+c2m diagrams edit '<share url>' --ops '[{"op":"style","nodes":["auth"],"set":{"backgroundColor":"#ffec99"}}]' --out auth.png
 ```
 
-`edit` patches the existing canvas (rename, add, connect, disconnect, relabel-edge, remove), keeps every untouched element exactly as it was, uploads the result and prints exactly one new share link. The old link keeps working. Node ids are the ones `show` prints. Uploading exists only in the CLI.
+`edit` patches the existing canvas (rename, add, connect, disconnect, relabel-edge, remove, style), keeps every untouched element exactly as it was, uploads the result and prints exactly one new share link. The old link keeps working. Node ids are the ones `show` prints. Uploading exists only in the CLI.
+
+`style` picks elements by `nodes` (Mermaid ids), `type` (`rectangle`, `arrow`, `text` and so on) or both, and applies `set`: `strokeColor`, `backgroundColor`, `strokeWidth`, `strokeStyle`, `fillStyle`, `roughness` and `opacity` go on the shape or arrow; `textColor`, `fontFamily` and `fontSize` go on its label, which is refitted in its box. Unknown keys, and a filter that matches nothing, are refused.
+
+`--out <file>.png` draws the edited diagram as a doc-ready PNG (same renderer and scale as `c2m excalidraw --png`); any other `--out` path gets the edited scene JSON. Stdout is still the new link.
 
 **New diagram from JSON** (`c2m excalidraw`, Node 20+, any OS): an agent describes boxes, labels and arrows in a short JSON array and gets back a share link, a Mermaid preview of what it drew, and layout warnings (overlaps, labels that do not fit, crowded shapes, crossing arrows, loose arrows). `c2m excalidraw --help` is the full manual: input format, worked example, sizing rules and the check-fix-upload loop.
 

@@ -23,6 +23,7 @@ const OP_FIELDS = {
   disconnect: ['from', 'to'],
   'relabel-edge': ['from', 'to', 'label'],
   remove: ['node'],
+  style: [],
 };
 
 function randomInt() { return Math.floor(Math.random() * 2 ** 31); }
@@ -469,7 +470,94 @@ function opRemove(scene, model, op) {
   removeElements(scene, ids);
 }
 
-const OPS = { rename: opRename, add: opAdd, connect: opConnect, disconnect: opDisconnect, 'relabel-edge': opRelabelEdge, remove: opRemove };
+// Keys a style op may set. Shape keys go on the matched shape or arrow; label
+// keys go on its label text (or on a matched text element itself). textColor
+// is the label's strokeColor, named apart so it never collides with the shape's.
+const STYLE_KEYS = {
+  strokeColor: 'shape', backgroundColor: 'shape', strokeWidth: 'shape', strokeStyle: 'shape',
+  fillStyle: 'shape', roughness: 'shape', opacity: 'shape',
+  textColor: 'label', fontFamily: 'label', fontSize: 'label',
+};
+const STYLE_ENUMS = {
+  strokeStyle: ['solid', 'dashed', 'dotted'],
+  fillStyle: ['hachure', 'cross-hatch', 'solid', 'zigzag'],
+};
+const STYLE_STRINGS = ['strokeColor', 'backgroundColor', 'textColor'];
+
+function checkStyleSet(set) {
+  if (!set || typeof set !== 'object' || Array.isArray(set) || !Object.keys(set).length) {
+    throw new Error('"set" must be an object with at least one of: ' + Object.keys(STYLE_KEYS).join(', '));
+  }
+  Object.keys(set).forEach(function (k) {
+    var v = set[k];
+    if (!STYLE_KEYS[k]) throw new Error('unknown style key "' + k + '"; valid keys: ' + Object.keys(STYLE_KEYS).join(', '));
+    if (STYLE_ENUMS[k]) {
+      if (STYLE_ENUMS[k].indexOf(v) < 0) throw new Error(k + ' must be one of ' + STYLE_ENUMS[k].join(', '));
+    } else if (STYLE_STRINGS.indexOf(k) >= 0) {
+      if (typeof v !== 'string' || !v) throw new Error(k + ' must be a colour string such as "#e03131"');
+    } else if (typeof v !== 'number' || !isFinite(v) || v < 0) {
+      throw new Error(k + ' must be a non-negative number');
+    }
+  });
+}
+
+// The label text elements of a shape or arrow, as the reader sees them.
+function labelElsOf(model, el) {
+  var item = model.nodes.get(el.id) || model.groups.get(el.id);
+  if (item) return item.label ? item.label.els : [];
+  var edge = model.edges.find(function (e) { return e.el.id === el.id; });
+  return edge && edge.label ? edge.label.els : [];
+}
+
+function opStyle(scene, model, op) {
+  checkStyleSet(op.set);
+  if (op.nodes == null && op.type == null) throw new Error('needs "nodes", "type" or both to pick elements');
+  if (op.nodes != null && (!Array.isArray(op.nodes) || !op.nodes.length || op.nodes.some(function (n) { return typeof n !== 'string'; }))) {
+    throw new Error('"nodes" must be a non-empty array of ids');
+  }
+  if (op.type != null && (typeof op.type !== 'string' || !op.type)) throw new Error('"type" must be an element type such as "rectangle" or "arrow"');
+  var matched = op.nodes
+    ? op.nodes.map(function (id) { return resolve(model, id, 'nodes', true).el; })
+    : scene.elements.filter(function (el) { return !el.isDeleted; });
+  if (op.type) matched = matched.filter(function (el) { return el.type === op.type; });
+  if (!matched.length) throw new Error('the filter matches no element');
+
+  var keys = Object.keys(op.set);
+  var count = 0;
+  matched.forEach(function (el) {
+    var own = el.type === 'text';
+    var shapeKeys = keys.filter(function (k) { return own || STYLE_KEYS[k] === 'shape'; });
+    var labelKeys = keys.filter(function (k) { return STYLE_KEYS[k] === 'label'; });
+    if (!own && shapeKeys.length) {
+      shapeKeys.forEach(function (k) { el[k] = op.set[k]; });
+      touch(el);
+      count++;
+    }
+    var texts = own ? [el] : labelKeys.length ? labelElsOf(model, el) : [];
+    texts.forEach(function (t) {
+      (own ? keys : labelKeys).forEach(function (k) {
+        if (k === 'textColor') t.strokeColor = op.set[k];
+        else if (STYLE_KEYS[k] === 'label' || own) t[k] = op.set[k];
+      });
+      if (op.set.fontSize != null) {
+        var container = t.containerId ? scene.elements.find(function (c) { return c.id === t.containerId; }) : null;
+        if (container) fitBoundText(t, container);
+        else {
+          var c = center(t);
+          fitBoundText(t, null);
+          t.x = c[0] - t.width / 2;
+          t.y = c[1] - t.height / 2;
+        }
+      } else {
+        touch(t);
+      }
+      count++;
+    });
+  });
+  return 'styled ' + count + ' element' + (count === 1 ? '' : 's');
+}
+
+const OPS = { rename: opRename, add: opAdd, connect: opConnect, disconnect: opDisconnect, 'relabel-edge': opRelabelEdge, remove: opRemove, style: opStyle };
 
 function checkShape(op, index) {
   if (!op || typeof op !== 'object') throw new Error('op ' + index + ' is not an object');
