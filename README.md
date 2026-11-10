@@ -48,7 +48,7 @@ c2m diagrams edit '<share url>' --ops '[{"op":"rename","node":"auth","label":"Id
 
 `edit` patches the existing canvas (rename, add, connect, disconnect, relabel-edge, remove), keeps every untouched element exactly as it was, uploads the result and prints exactly one new share link. The old link keeps working. Node ids are the ones `show` prints. Uploading exists only in the CLI.
 
-**New diagram from JSON** (`c2m excalidraw`, Node 20+, any OS): an agent describes boxes, labels and arrows in a short JSON array and gets back a share link, a Mermaid preview of what it drew, and layout warnings (overlaps, labels that do not fit, loose arrows). `c2m excalidraw --help` is the full manual: input format, worked example, sizing rules and the check-fix-upload loop.
+**New diagram from JSON** (`c2m excalidraw`, Node 20+, any OS): an agent describes boxes, labels and arrows in a short JSON array and gets back a share link, a Mermaid preview of what it drew, and layout warnings (overlaps, labels that do not fit, crowded shapes, crossing arrows, loose arrows). `c2m excalidraw --help` is the full manual: input format, worked example, sizing rules and the check-fix-upload loop.
 
 ```bash
 c2m excalidraw diagram.json --no-upload   # check: preview + warnings only

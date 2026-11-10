@@ -1,0 +1,3 @@
+[
+  {"id": "svc", "type": "rectangle", "x": 0, "y": 0, "width": 120, "height": 60, "label": {"text": "Authentication service gateway"}}
+]

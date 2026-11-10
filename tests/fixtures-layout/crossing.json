@@ -1,0 +1,8 @@
+[
+  {"id": "a", "type": "rectangle", "x": 0, "y": 0, "width": 160, "height": 70, "label": "A"},
+  {"id": "b", "type": "rectangle", "x": 400, "y": 0, "width": 160, "height": 70, "label": "B"},
+  {"id": "c", "type": "rectangle", "x": 0, "y": 300, "width": 160, "height": 70, "label": "C"},
+  {"id": "d", "type": "rectangle", "x": 400, "y": 300, "width": 160, "height": 70, "label": "D"},
+  {"id": "ad", "type": "arrow", "start": {"id": "a"}, "end": {"id": "d"}},
+  {"id": "cb", "type": "arrow", "start": {"id": "c"}, "end": {"id": "b"}}
+]
