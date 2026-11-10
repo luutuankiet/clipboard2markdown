@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { seededBackend, FIXTURE_KEY } from './seeded-backend.js';
 import { parseMermaid } from './mermaid-semantics.js';
+import { pngSize } from './png-decode.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const cli = path.join(root, 'bin', 'diagrams.js');
@@ -105,5 +106,15 @@ describe('c2m-diagrams CLI', () => {
     const r = run(['frobnicate', 'x']);
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('usage: c2m diagrams');
+  });
+
+  it('edit --out <file>.png writes the edited diagram as a PNG and still prints the link', { timeout: 60000 }, () => {
+    const out = path.join(backendDir, '..', path.basename(backendDir) + '-edited.png');
+    const r = run(['edit', link('bound01'), '--ops', '[{"op":"style","nodes":["auth"],"set":{"backgroundColor":"#ffec99"}}]', '--out', out]);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout.trim()).toMatch(/^https:\/\/excalidraw\.com\/#json=local\d+,[A-Za-z0-9_-]+$/);
+    const size = pngSize(fs.readFileSync(out));
+    expect(size.width).toBeGreaterThan(100);
+    expect(r.stderr).toContain('wrote ' + out);
   });
 });
