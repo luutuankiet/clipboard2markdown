@@ -8,6 +8,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename, resolve } from 'path';
 import { buildSkeleton } from '../src/diagrams/skeleton.js';
 import { saveScene } from '../src/diagrams/share-link.js';
+import { sceneToMermaid } from '../src/diagrams/scene-to-mermaid.js';
 
 export const EXCALIDRAW_HELP = `c2m excalidraw - turn a JSON diagram description into an excalidraw.com share link
 
@@ -17,6 +18,8 @@ Usage:
   c2m excalidraw --no-upload ...  check only: print preview and warnings, no link
   c2m excalidraw --png [<dir>] <file.json>...
                                   also draw each diagram as PNG (see PNG below)
+  c2m excalidraw --out <folder>/images/ <file.json>...
+                                  draw into a working copy's images folder
   c2m excalidraw --help           show this help
 
 OUTPUT (stdout, in this order)
@@ -126,29 +129,33 @@ WARNINGS
   dropped            unsupported type, or an MCP-only command such as
                      cameraUpdate, delete, restoreCheckpoint
 
-PNG (for pasting into a Google Doc)
+PNG (for pasting into a Google Doc): one command, then one write
   c2m excalidraw --png [<dir>] a.json b.json ...
-  Draws each diagram locally (no browser; the drawing itself makes no network
-  request) and uploads it for its share link as above. Each input is either
-  the element array described here or a whole scene ({"elements": [...]},
-  e.g. a .excalidraw file). A scene's elements may use the same shorthand
-  (label, start/end, arrows without points); a scene without it is drawn and
-  uploaded as is. For each input <name>.json it writes:
-    <name>.png          for the document: scale 3, lowered until the image
-                        has at most 25,000,000 pixels (Google Docs' limit)
-    <name>.review.png   for a quick look: at most 1000 px on the long side
-  <dir> defaults to ~/.cache/c2m/renders/ ($XDG_CACHE_HOME/c2m/renders/);
-  each run first deletes PNGs there older than 24 h. A <dir> you name is
-  never cleaned. --png=<dir> also works.
-  Then, per diagram:
-    ![<name>](attach:<name>)                  the image line for the document
+  c2m excalidraw --out <folder>/images/ a.json b.json ...
+  Builds and checks each diagram, draws it locally (no browser; the drawing
+  itself makes no network request) and uploads it for its share link as
+  above. Each input is either the element array described here or a whole
+  scene ({"elements": [...]}, e.g. a .excalidraw file). A scene's elements
+  may use the same shorthand (label, start/end, arrows without points); a
+  scene without it is drawn and uploaded as is. For each input <name>.json
+  it writes <name>.png: scale 3, lowered until the image has at most
+  25,000,000 pixels (Google Docs' limit).
+  --png <dir> defaults to ~/.cache/c2m/renders/ ($XDG_CACHE_HOME/c2m/renders/);
+  each run first deletes PNGs there older than 24 h. A <dir> you name, and
+  the --out folder, are never cleaned. --png=<dir> and --out=<dir> also work.
+  Then, per diagram, a block to paste:
+    \`\`\`mermaid ...\`\`\`                         the preview, as above
+    ![<name>](attach:<name>)                  the image line (--png)
+    ![<name>](./images/<name>.png)            the image line (--out .../images/)
     [Edit this diagram](<share link>)         omitted with --no-upload
-    "<name>": "@file64:/abs/path/<name>.png"  the entry for the images map
-    review: /abs/path/<name>.review.png
+    "<name>": "@file64:/abs/path/<name>.png"  the images map entry (--png only)
     warning: ...                              as above, if any
-  To check a drawing, read its Mermaid preview first (rerun without --png, or
-  c2m diagrams show <file> for a whole scene); open the review PNG only when
-  the preview cannot answer the question.
+  --png: write the image line with edit_doc or create_doc, mapping <name> to
+  its @file64: pointer in "images". --out: the image line goes in the tab
+  file, and the push inserts the PNG. Check the drawing by its preview and
+  warnings; there is no picture to look at unless a human asks for one:
+  --review   also write <name>.review.png (at most 1000 px on the long side)
+             and print "review: <path>" in its block.
   Text uses Excalidraw's fonts; CJK text is not drawn (the CJK font is not
   shipped) and gets a warning.
 
@@ -191,7 +198,10 @@ function usesShorthand(el) {
 // an element array, keeping the scene's own appState and files.
 function toScene(input) {
   if (input && !Array.isArray(input) && Array.isArray(input.elements)) {
-    if (!input.elements.some(usesShorthand)) return { scene: input, preview: null, warnings: [] };
+    if (!input.elements.some(usesShorthand)) {
+      var read = sceneToMermaid(input);
+      return { scene: input, preview: read.text, warnings: read.warnings };
+    }
     var built = buildSkeleton(input.elements);
     if (input.appState) built.scene.appState = input.appState;
     if (input.files) built.scene.files = input.files;
@@ -222,7 +232,7 @@ function looksLikeInput(a) {
 export async function runExcalidraw(argv, io) {
   var stdout = io.stdout, stderr = io.stderr;
   var noUpload = false;
-  var png = false, pngDir = null;
+  var png = false, pngDir = null, outDir = null, review = false;
   var targets = [];
   for (var i = 0; i < argv.length; i++) {
     var a = argv[i];
@@ -232,6 +242,11 @@ export async function runExcalidraw(argv, io) {
       png = true;
       if (i + 1 < argv.length && !looksLikeInput(argv[i + 1])) pngDir = argv[++i];
     } else if (a.startsWith('--png=')) { png = true; pngDir = a.slice(6); }
+    else if (a === '--out') {
+      if (i + 1 >= argv.length) { stderr.write('c2m excalidraw: --out needs a folder\n'); return 1; }
+      png = true; outDir = argv[++i];
+    } else if (a.startsWith('--out=')) { png = true; outDir = a.slice(6); }
+    else if (a === '--review') review = true;
     else if (a.startsWith('--')) { stderr.write('c2m excalidraw: unknown option ' + a + '\n'); return 1; }
     else targets.push(a);
   }
@@ -242,7 +257,8 @@ export async function runExcalidraw(argv, io) {
   }
 
   try {
-    if (png) return await runPng(targets, { dir: pngDir, noUpload: noUpload }, io);
+    if (png && pngDir !== null && outDir !== null) throw new Error('use --png <dir> or --out <dir>, not both');
+    if (png) return await runPng(targets, { dir: outDir !== null ? outDir : pngDir, folder: outDir !== null, review: review, noUpload: noUpload }, io);
     var built = buildSkeleton(parseJson(readInput(targets[0], io.stdin)));
     var url = noUpload ? null : await upload(built.scene, io.fetch);
     if (url) stdout.write(url + '\n');
@@ -266,7 +282,7 @@ async function runPng(targets, opts, io) {
   // last file costs no renders.
   var items = targets.map(function (t, k) {
     var built = toScene(parseJson(readInput(t, io.stdin)));
-    return { name: names[k], scene: built.scene, warnings: built.warnings };
+    return { name: names[k], scene: built.scene, preview: built.preview, warnings: built.warnings };
   });
 
   var render = await import('../src/excalidraw-png.js');
@@ -288,21 +304,26 @@ async function runPng(targets, opts, io) {
       throw new Error(it.name + ': ' + (e && e.message ? e.message : e));
     }
     var file = resolve(dir, it.name + '.png');
-    var reviewFile = resolve(dir, it.name + '.review.png');
+    var reviewFile = opts.review ? resolve(dir, it.name + '.review.png') : null;
     writeFileSync(file, out.png);
-    writeFileSync(reviewFile, out.review);
+    if (reviewFile) writeFileSync(reviewFile, out.review);
     var url = opts.noUpload ? null : await upload(it.scene, io.fetch);
     var warnings = it.warnings.slice();
     if (out.scale < 3) warnings.push('drawn at scale ' + out.scale + ' to stay under 25,000,000 pixels');
     if (render.hasCjkText(it.scene)) warnings.push('CJK text is not drawn: the CJK font is not shipped');
-    var lines = ['![' + it.name + '](attach:' + it.name + ')'];
+    // Folder path: the image line points into the folder the PNG sits in,
+    // relative to its parent (./images/<name>.png for --out work/images/),
+    // which is how a working copy's push finds a new image.
+    var target = opts.folder ? './' + basename(dir) + '/' + it.name + '.png' : 'attach:' + it.name;
+    var lines = [];
+    if (it.preview) lines.push('```mermaid\n' + it.preview + '\n```');
+    lines.push('![' + it.name + '](' + target + ')');
     if (url) lines.push('[Edit this diagram](' + url + ')');
-    lines.push(JSON.stringify(it.name) + ': ' + JSON.stringify('@file64:' + file));
-    lines.push('review: ' + reviewFile);
+    if (!opts.folder) lines.push(JSON.stringify(it.name) + ': ' + JSON.stringify('@file64:' + file));
+    if (reviewFile) lines.push('review: ' + reviewFile);
     warnings.forEach(function (w) { lines.push('warning: ' + w); });
     blocks.push(lines.join('\n') + '\n');
   }
   stdout.write(blocks.join('\n'));
-  stdout.write('\nCheck a drawing by its Mermaid preview first (c2m excalidraw <file> --no-upload, or c2m diagrams show <file> for a whole scene); open the review PNG only if that is not enough.\n');
   return 0;
 }
