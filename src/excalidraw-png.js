@@ -52,7 +52,7 @@ export function pickScale(width, height) {
 
 // ------------------------------------------------------------ excalidraw ---
 
-var exportToSvgPromise;
+var bundlePromise;
 
 function installDom() {
   var bundle = join(VENDOR, 'excalidraw.bundle.mjs');
@@ -86,6 +86,12 @@ function installDom() {
         set: function (o, k, v) { o[k] = v; return true; },
       });
     };
+
+    // jsdom has no layout either. Mermaid (used by the Mermaid input) sizes
+    // every label with getBBox / getBoundingClientRect before dagre lays the
+    // graph out; estimate from the text at Excalidraw's average glyph width,
+    // which is what the resulting labels are measured with anyway.
+    installLayoutEstimates(win);
 
     // No CSS Font Loading API in jsdom either.
     function FontFace(family, source, desc) { Object.assign(this, { family: family, source: source, status: 'loaded' }, desc); }
@@ -121,12 +127,18 @@ function installDom() {
     };
     win.EXCALIDRAW_ASSET_PATH = ASSET_ORIGIN;
     return import(pathToFileURL(bundle).href);
-  }).then(function (m) { return m.exportToSvg; });
+  });
+}
+
+// The vendored bundle: exportToSvg, convertToExcalidrawElements and
+// parseMermaidToExcalidraw, loaded once under the jsdom globals above.
+export function loadExcalidraw() {
+  if (!bundlePromise) bundlePromise = installDom();
+  return bundlePromise;
 }
 
 export async function sceneToSvg(scene) {
-  if (!exportToSvgPromise) exportToSvgPromise = installDom();
-  var exportToSvg = await exportToSvgPromise;
+  var exportToSvg = (await loadExcalidraw()).exportToSvg;
   var elements = (scene.elements || []).filter(function (e) { return !e.isDeleted; });
   if (!elements.length) throw new Error('the scene has no elements to draw');
   // Excalidraw reports the missing CJK font on console.error; the caller gets
@@ -142,10 +154,20 @@ export async function sceneToSvg(scene) {
       appState: Object.assign({}, scene.appState, { exportBackground: true, viewBackgroundColor: '#ffffff' }),
       files: scene.files || {},
     });
-    return svg.outerHTML;
+    return fixImageSymbols(svg.outerHTML);
   } finally {
     console.error = consoleError;
   }
+}
+
+// Excalidraw draws each picture as <symbol><image width="100%" height="100%">
+// placed by <use width height>. resvg sizes that 100% against the whole
+// drawing instead of the <use>, so the picture comes out at its own pixel
+// size, cropped. A viewBox on the symbol makes it scale to the <use> box.
+export function fixImageSymbols(svg) {
+  return svg.replace(/<symbol id="(image-[^"]*)">(\s*<image\b[^>]*?)width="100%" height="100%"/g, function (_, id, img) {
+    return '<symbol id="' + id + '" viewBox="0 0 100 100" preserveAspectRatio="none">' + img + 'width="100" height="100"';
+  });
 }
 
 // CJK text needs Xiaolai, which the package leaves out (13 MB); it renders blank.
@@ -153,6 +175,71 @@ export function hasCjkText(scene) {
   return (scene.elements || []).some(function (e) {
     return !e.isDeleted && e.type === 'text' && /[⺀-鿿가-힯豈-﫿＀-￯]/.test(e.text || '');
   });
+}
+
+// Text box estimate shared by the getBBox stand-in: 0.7 em per character,
+// 1.25 em per line. Generous on purpose: Excalifont is wide, and a shape sized
+// too tight makes Excalidraw wrap its label mid-word ("Retr / y").
+export function estimateTextBox(text, fontSize) {
+  var lines = String(text || '').split(/\n|<br\s*\/?>/i);
+  var longest = lines.reduce(function (m, l) { return Math.max(m, l.length); }, 0);
+  return { width: longest * fontSize * 0.7, height: lines.length * fontSize * 1.25 };
+}
+
+function fontSizeOf(win, el) {
+  for (var e = el; e && e.getAttribute; e = e.parentNode) {
+    var fs = e.style && e.style.fontSize ? e.style.fontSize : e.getAttribute('font-size');
+    if (fs) return parseFloat(fs) || 16;
+  }
+  return 16;
+}
+
+function installLayoutEstimates(win) {
+  var num = function (el, k) { return parseFloat(el.getAttribute(k)) || 0; };
+  function box(el) {
+    var tag = (el.tagName || '').toLowerCase().replace(/^svg:/, '');
+    if (tag === 'rect' || tag === 'foreignobject' || tag === 'image') {
+      return { x: num(el, 'x'), y: num(el, 'y'), width: num(el, 'width'), height: num(el, 'height') };
+    }
+    if (tag === 'circle') { var r = num(el, 'r'); return { x: num(el, 'cx') - r, y: num(el, 'cy') - r, width: 2 * r, height: 2 * r }; }
+    if (tag === 'polygon' || tag === 'polyline' || tag === 'path' || tag === 'line') {
+      // Bounding box of the listed coordinates: exact for polygons and for
+      // the absolute paths mermaid draws, close enough for the rest.
+      var src = tag === 'path' ? el.getAttribute('d') : tag === 'line'
+        ? [num(el, 'x1'), num(el, 'y1'), num(el, 'x2'), num(el, 'y2')].join(' ') : el.getAttribute('points');
+      var n = String(src || '').match(/-?\d*\.?\d+(?:e-?\d+)?/gi) || [];
+      var xs = [], ys = [];
+      for (var i = 0; i + 1 < n.length; i += 2) { xs.push(+n[i]); ys.push(+n[i + 1]); }
+      if (!xs.length) return { x: 0, y: 0, width: 0, height: 0 };
+      var px = Math.min.apply(null, xs), py = Math.min.apply(null, ys);
+      return { x: px, y: py, width: Math.max.apply(null, xs) - px, height: Math.max.apply(null, ys) - py };
+    }
+    if (tag === 'text' || tag === 'tspan') {
+      var lines = el.querySelectorAll('tspan.row, tspan[dy]');
+      var text = lines.length > 1 ? Array.from(lines).map(function (t) { return t.textContent; }).join('\n') : el.textContent;
+      var t = estimateTextBox(text, fontSizeOf(win, el));
+      return { x: 0, y: -t.height / 2, width: t.width, height: t.height };
+    }
+    var kids = Array.from(el.children || []).map(box).filter(function (b) { return b.width || b.height; });
+    if (!kids.length) {
+      if (el.textContent && el.textContent.trim()) { var tb = estimateTextBox(el.textContent.trim(), fontSizeOf(win, el)); return { x: 0, y: 0, width: tb.width, height: tb.height }; }
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
+    var x0 = Math.min.apply(null, kids.map(function (b) { return b.x; }));
+    var y0 = Math.min.apply(null, kids.map(function (b) { return b.y; }));
+    var x1 = Math.max.apply(null, kids.map(function (b) { return b.x + b.width; }));
+    var y1 = Math.max.apply(null, kids.map(function (b) { return b.y + b.height; }));
+    return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  }
+  var rect = function (b) { return Object.assign({ top: b.y, left: b.x, right: b.x + b.width, bottom: b.y + b.height }, b); };
+  win.SVGElement.prototype.getBBox = function () { return box(this); };
+  win.SVGElement.prototype.getComputedTextLength = function () { return box(this).width; };
+  win.Element.prototype.getBoundingClientRect = function () {
+    var text = (this.textContent || '').trim();
+    if (!text) return rect({ x: 0, y: 0, width: 0, height: 0 });
+    var t = estimateTextBox(text, fontSizeOf(win, this));
+    return rect({ x: 0, y: 0, width: t.width, height: t.height });
+  };
 }
 
 // ------------------------------------------------------------------ resvg ---

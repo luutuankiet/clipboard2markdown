@@ -37,6 +37,8 @@ bin/cli.js                  The one CLI (`clipboard2markdown`, alias `c2m`): cli
 bin/diagrams.js             `c2m diagrams`: expand, strip, show, edit
 bin/excalidraw.js           `c2m excalidraw`: JSON skeleton -> new share link; --png draws PNGs
 src/excalidraw-png.js       Scene -> PNG for --png: vendored excalidraw under jsdom, then resvg
+src/mermaid-input.js        .mmd input for c2m excalidraw: Mermaid -> Excalidraw shapes, house style
+src/doodle.js               Annotated screenshot input: picture, margin notes, curved arrows
 scripts/build-excalidraw-bundle.mjs  Builds vendor/excalidraw/ (gitignored, shipped); runs on npm install/pack
 src/clipboard-convert.js    What the clipboard command does to content (direction, diagrams step)
 clipboard2markdown.js       Web UI controller (paste events, preview, copy)

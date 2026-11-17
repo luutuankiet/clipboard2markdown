@@ -73,6 +73,18 @@ c2m excalidraw --out work/images/ a.json    # into a working copy: ![a](./images
 
 Per diagram it writes `<name>.png` (scale 3, lowered until the image has at most 25,000,000 pixels, Google Docs' limit), then prints the Mermaid preview, any warnings, an image line `![<name>](attach:<name>)`, an `Edit: <share link>` line (the link as plain text under the image, so it shows in the doc) and the images map entry `"<name>": "@file64:/abs/path/<name>.png"`. With `--out <folder>/images/` instead of `--png`, the PNG goes into that folder and the image line reads `![<name>](./images/<name>.png)`, ready for a working copy. No review PNG is written unless you pass `--review`; the preview and warnings are the check. Each run first deletes PNGs older than 24 hours in the default cache folder; a folder you name is never cleaned. CJK text is not drawn, because the 13 MB CJK font is left out of the package; such diagrams get a warning.
 
+**Mermaid in, Excalidraw out** (`c2m excalidraw <file>.mmd`): a Mermaid file goes through the same command and gives the same outputs (link, PNG, paste block), drawn by Mermaid's layout as Excalidraw shapes in the house style. Flowcharts and sequence diagrams become editable boxes and arrows; other diagram types come out as one picture, with a warning.
+
+```bash
+c2m excalidraw --png flow.mmd             # PNG + link + paste block
+```
+
+**Annotated screenshots** (doodles): a JSON object naming a PNG or JPEG and a list of notes, each with a `target` point `[x, y]` or box `[x, y, w, h]` in the image's pixels and an optional `side`. Notes go in the margins in Excalidraw's hand font, never on the picture or on each other, with a curved arrow to each target. The share link opens without the picture (excalidraw.com stores pictures apart from the link); the PNG is complete. Full spec in `c2m excalidraw --help`, section DOODLE.
+
+```bash
+c2m excalidraw --png shot.doodle.json     # {"image": "shot.png", "notes": [{"text": "...", "target": [10, 20, 300, 40]}]}
+```
+
 ## Demo
 
 **Live:** https://luutuankiet.github.io/clipboard2markdown/

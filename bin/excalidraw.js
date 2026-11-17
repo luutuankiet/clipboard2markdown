@@ -5,7 +5,7 @@
 // step with src/diagrams/skeleton.js.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { basename, resolve } from 'path';
+import { basename, dirname, resolve } from 'path';
 import { buildSkeleton } from '../src/diagrams/skeleton.js';
 import { saveScene } from '../src/diagrams/share-link.js';
 import { sceneToMermaid } from '../src/diagrams/scene-to-mermaid.js';
@@ -20,6 +20,8 @@ Usage:
                                   also draw each diagram as PNG (see PNG below)
   c2m excalidraw --out <folder>/images/ <file.json>...
                                   draw into a working copy's images folder
+  c2m excalidraw <file.mmd>       a Mermaid diagram instead (see MERMAID below)
+  c2m excalidraw <shot.json>      an annotated screenshot (see DOODLE below)
   c2m excalidraw --help           show this help
 
 OUTPUT (stdout, in this order)
@@ -163,9 +165,36 @@ PNG (for pasting into a Google Doc): one command, then one write
   Text uses Excalidraw's fonts; CJK text is not drawn (the CJK font is not
   shipped) and gets a warning.
 
+MERMAID (input file ending .mmd or .mermaid)
+  c2m excalidraw --png flow.mmd seq.mmd
+  Mermaid's own layout, drawn as Excalidraw shapes in the house style's plan
+  pass (white nodes, dark stroke, Excalifont). Flowcharts and sequence
+  diagrams become editable shapes; other types (class, state, gantt ...) come
+  out as one picture and get a warning. The preview is your Mermaid source.
+  Colour a node afterwards with c2m diagrams edit (style op).
+
+DOODLE (annotated screenshot: a JSON object with "image" and "notes")
+  {"image": "shot.png",            PNG or JPEG, relative to this JSON file
+   "width": 1100,                  optional: drawn width in px (default the
+                                   image's own, at most 1400); targets stay
+                                   in the image's own pixels
+   "color": "#1971c2",             optional: pen colour for notes and arrows
+   "notes": [
+     {"text": "honest about gaps", "target": [100, 150, 370, 45]},
+     {"text": "green = in the warehouse", "target": [1662, 341], "side": "right"}]}
+  target   [x, y] a point, or [x, y, width, height] a box (gets an outline),
+           in the image's pixels, measured from its top-left corner
+  side     left, right, top or bottom; default: the image edge nearest the
+           target. Notes stack in the margin on that side, never on the
+           image or on each other, wrapped at ~28 characters ("\n" breaks).
+  Each note gets a curved arrow from its edge to the target, in Excalidraw's
+  hand font. The preview lists the notes. The share link opens WITHOUT the
+  picture (excalidraw.com stores pictures apart from the link), so every
+  doodle warns; the PNG is the deliverable.
+
 NOT SUPPORTED
-  images, frames, freedraw, Mermaid as input, editing an existing link (use
-  c2m diagrams edit for that), writing .excalidraw files.
+  frames, freedraw, editing an existing link (use c2m diagrams edit for that),
+  writing .excalidraw files, pictures in share links.
 `;
 
 function readInput(target, stdin) {
@@ -214,6 +243,27 @@ function toScene(input) {
   return buildSkeleton(input);
 }
 
+// One input -> { scene, preview, warnings, fence }. A .mmd file is Mermaid; a
+// JSON object with "image" and "notes" is a doodle; anything else is the
+// element array or scene described in the help.
+async function buildInput(target, io) {
+  var text = readInput(target, io.stdin);
+  if (/\.(mmd|mermaid)$/i.test(target)) {
+    var mermaid = await import('../src/mermaid-input.js');
+    return Object.assign({ fence: 'mermaid' }, await mermaid.mermaidToScene(text));
+  }
+  var input = parseJson(text);
+  var doodle = await import('../src/doodle.js');
+  if (doodle.isDoodleSpec(input)) {
+    var base = target === '-' ? process.cwd() : dirname(resolve(target));
+    var bytes;
+    try { bytes = readFileSync(resolve(base, input.image)); } catch (e) { throw new Error('cannot read image ' + input.image + ': ' + e.message); }
+    var render = await import('../src/excalidraw-png.js');
+    return Object.assign({ fence: 'text' }, await doodle.doodleToScene(input, bytes, render.loadExcalidraw));
+  }
+  return Object.assign({ fence: 'mermaid' }, toScene(input));
+}
+
 function parseJson(text) {
   try {
     return JSON.parse(text);
@@ -223,13 +273,13 @@ function parseJson(text) {
 }
 
 function sceneName(target) {
-  return target === '-' ? 'diagram' : basename(target).replace(/\.(json|excalidraw)$/i, '');
+  return target === '-' ? 'diagram' : basename(target).replace(/\.(json|excalidraw|mmd|mermaid)$/i, '');
 }
 
 // `--png` takes an optional folder: the next argument is the folder unless it
 // looks like an input (-, *.json, *.excalidraw) or an option.
 function looksLikeInput(a) {
-  return a === '-' || a.startsWith('--') || /\.(json|excalidraw)$/i.test(a);
+  return a === '-' || a.startsWith('--') || /\.(json|excalidraw|mmd|mermaid)$/i.test(a);
 }
 
 // Returns the exit code. `io.fetch`, `io.stdin` and `io.env` exist for tests.
@@ -263,10 +313,10 @@ export async function runExcalidraw(argv, io) {
   try {
     if (png && pngDir !== null && outDir !== null) throw new Error('use --png <dir> or --out <dir>, not both');
     if (png) return await runPng(targets, { dir: outDir !== null ? outDir : pngDir, folder: outDir !== null, review: review, noUpload: noUpload }, io);
-    var built = buildSkeleton(parseJson(readInput(targets[0], io.stdin)));
+    var built = await buildInput(targets[0], io);
     var url = noUpload ? null : await upload(built.scene, io.fetch);
     if (url) stdout.write(url + '\n');
-    stdout.write('```mermaid\n' + built.preview + '\n```\n');
+    stdout.write('```' + built.fence + '\n' + built.preview + '\n```\n');
     built.warnings.forEach(function (w) { stdout.write('warning: ' + w + '\n'); });
     return 0;
   } catch (e) {
@@ -284,10 +334,11 @@ async function runPng(targets, opts, io) {
 
   // Read and build every input before drawing anything, so a typo in the
   // last file costs no renders.
-  var items = targets.map(function (t, k) {
-    var built = toScene(parseJson(readInput(t, io.stdin)));
-    return { name: names[k], scene: built.scene, preview: built.preview, warnings: built.warnings };
-  });
+  var items = [];
+  for (var t = 0; t < targets.length; t++) {
+    var built = await buildInput(targets[t], io);
+    items.push({ name: names[t], scene: built.scene, preview: built.preview, warnings: built.warnings, fence: built.fence });
+  }
 
   var render = await import('../src/excalidraw-png.js');
   var dir;
@@ -320,7 +371,7 @@ async function runPng(targets, opts, io) {
     // which is how a working copy's push finds a new image.
     var target = opts.folder ? './' + basename(dir) + '/' + it.name + '.png' : 'attach:' + it.name;
     var lines = [];
-    if (it.preview) lines.push('```mermaid\n' + it.preview + '\n```');
+    if (it.preview) lines.push('```' + it.fence + '\n' + it.preview + '\n```');
     lines.push('![' + it.name + '](' + target + ')');
     // The share link sits as a plain text line under the image, so it shows in
     // the doc: no API request sets an image's alt text, and a link hidden

@@ -40,7 +40,7 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
 await build({
-  stdin: { contents: "export { exportToSvg } from '@excalidraw/excalidraw';", resolveDir: root, loader: 'js' },
+  stdin: { contents: "export { exportToSvg, convertToExcalidrawElements } from '@excalidraw/excalidraw'; export { parseMermaidToExcalidraw } from '@excalidraw/mermaid-to-excalidraw';", resolveDir: root, loader: 'js' },
   bundle: true,
   minify: true,
   platform: 'node',
