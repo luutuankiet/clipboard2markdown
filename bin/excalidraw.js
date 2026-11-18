@@ -137,6 +137,8 @@ LINT (every input: .mmd, element array, whole scene)
   e  a label is wider or taller than its shape
   f  text prints under 8 pt (warn under 10 pt) once the scene is scaled to the
      page width: 468 pt, or --page-pt <n>
+  g  (warn) more than 3 filled shapes or 2 fill colours; white, transparent and
+     greys are free, frames are skipped. Everything white, colour only the point.
   --strict   any error-level finding exits 1, prints the findings to stderr and
              writes no PNG and makes no link. Use it in the loop: fix until clean.
   c2m lint <file>...   (or --lint-only) prints one summary line and the findings

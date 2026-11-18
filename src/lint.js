@@ -10,6 +10,7 @@
 //   d  an arrow end is unbound, bound to a missing element, or far from its shape
 //   e  label text is wider (or taller) than the box that holds it
 //   f  font size, once the whole scene is scaled to page width, is too small
+//   g  colour budget (warn): more than 3 filled shapes or 2 fill colours
 
 const SHAPES = new Set(['rectangle', 'diamond', 'ellipse']);
 const DRAWN = new Set(['rectangle', 'diamond', 'ellipse', 'text', 'arrow', 'line']);
@@ -20,7 +21,7 @@ const ARROW_FAR = 20;     // px: a bound end farther than this from its shape is
 const NEAR = 12;          // px: an unbound end this close to a shape only touches
 const MIN_AREA = 4;       // px^2 overlap below which a touch is ignored
 export const PAGE_PT = 468;
-export const ALL_CLASSES = ['a', 'b', 'c', 'd', 'e', 'f'];
+export const ALL_CLASSES = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 
 function bbox(e) { return [e.x, e.y, e.x + e.width, e.y + e.height]; }
 
@@ -208,6 +209,22 @@ export function lintScene(scene, opts) {
       if (minPt < 8) add('f', 'error', 'scene is ' + Math.round(sw) + ' px wide; at ' + pagePt + ' pt page width its ' + fs0 + ' px text prints at ' + minPt.toFixed(1) + ' pt (minimum 8); make the diagram narrower');
       else if (minPt < 10) add('f', 'warn', 'text prints at ' + minPt.toFixed(1) + ' pt at page width (scene ' + Math.round(sw) + ' px wide)');
     }
+  }
+
+  // g: colour budget. White, transparent and greys (RGB channels within 16 of
+  // each other) are neutral; frames and subgraph containers are skipped.
+  function neutral(c) {
+    c = String(c || 'transparent').toLowerCase();
+    if (c === 'transparent' || c === 'white' || c === '#fff' || c === '#ffffff') return true;
+    var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/.exec(c);
+    if (!m) return false;
+    var ch = [1, 2, 3].map(function (i) { return parseInt(m[i], 16); });
+    return Math.max.apply(null, ch) - Math.min.apply(null, ch) < 16;
+  }
+  var filled = shapes.filter(function (e) { return !neutral(e.backgroundColor) && !frames.has(e.id); });
+  var hues = new Set(filled.map(function (e) { return String(e.backgroundColor).toLowerCase(); }));
+  if (filled.length > 3 || hues.size > 2) {
+    add('g', 'warn', filled.length + ' filled shapes in ' + hues.size + ' colours; keep everything white and colour only the 1 to 3 that carry the point');
   }
   return { findings: findings, meta: { width: Math.round(sw), height: Math.round(sh), minPt: minPt === null ? null : Math.round(minPt * 10) / 10, frames: frames.size, shapes: shapes.length } };
 }

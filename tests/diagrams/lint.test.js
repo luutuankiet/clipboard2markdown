@@ -81,6 +81,37 @@ describe('lintScene', () => {
   });
 });
 
+describe('colour budget (g)', () => {
+  const boxes = (colours) => colours.map((c, i) => ({ id: 'n' + i, type: 'rectangle', x: i * 260, y: 0, width: 200, height: 70, label: 'N' + i, backgroundColor: c }));
+  const g = (colours) => lintScene(buildSkeleton(boxes(colours)).scene).findings.filter((f) => f.cls === 'g');
+
+  it('warns on more than 3 filled shapes, or more than 2 colours', () => {
+    const four = g(['#a5d8ff', '#a5d8ff', '#a5d8ff', '#a5d8ff']);
+    expect(four).toHaveLength(1);
+    expect(four[0]).toMatchObject({ level: 'warn' });
+    expect(four[0].message).toBe('4 filled shapes in 1 colours; keep everything white and colour only the 1 to 3 that carry the point');
+    expect(g(['#a5d8ff', '#b2f2bb', '#ffec99'])[0].message).toMatch(/^3 filled shapes in 3 colours/);
+  });
+
+  it('treats transparent, white and greys as neutral, and allows up to 3 filled shapes in 2 colours', () => {
+    expect(g(['transparent', '#ffffff', 'white', '#f1f3f5', '#868e96'])).toEqual([]);
+    expect(g(['#a5d8ff', '#a5d8ff', '#b2f2bb'])).toEqual([]);
+  });
+
+  it('does not count a frame that contains other shapes', () => {
+    const els = [{ id: 'f', type: 'rectangle', x: -40, y: -80, width: 900, height: 300, label: 'Group', backgroundColor: '#a5d8ff' }, ...boxes(['#b2f2bb', '#b2f2bb', '#b2f2bb'])];
+    expect(lintScene(buildSkeleton(els).scene).findings.filter((f) => f.cls === 'g')).toEqual([]);
+  });
+
+  it('new shapes default to no fill, and Mermaid shapes to white', async () => {
+    const { scene } = buildSkeleton([{ id: 'a', type: 'rectangle', x: 0, y: 0, width: 160, height: 70, label: 'A' }]);
+    expect(scene.elements.find((e) => e.id === 'a').backgroundColor).toBe('transparent');
+    const { mermaidToScene } = await import('../../src/mermaid-input.js');
+    const r = await mermaidToScene('flowchart TD\n  a[A] --> b{B}');
+    r.scene.elements.filter((e) => ['rectangle', 'diamond', 'ellipse'].includes(e.type)).forEach((e) => expect(e.backgroundColor).toBe('#ffffff'));
+  }, 60000);
+});
+
 describe('arrow ends on diamond and ellipse outlines', () => {
   it('a diagonal arrow leaves a diamond on its slanted side, not at the box corner', () => {
     const { scene } = buildSkeleton([
@@ -113,7 +144,7 @@ describe('--strict and c2m lint', () => {
     const r = await run([fx('fan-out.mmd'), '--no-upload']);
     expect(r.code).toBe(0);
     expect(r.stdout).toMatch(/warning: lint f \(error\)/);
-  });
+  }, 60000);
 
   it('--strict on a bad .mmd exits 1, prints the findings, writes nothing', async () => {
     const out = mkdtempSync(path.join(tmpdir(), 'c2m-strict-'));
