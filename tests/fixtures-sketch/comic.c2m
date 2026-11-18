@@ -1,0 +1,20 @@
+strip 2 cols
+panel "The ask" note "Two words, three meanings."
+  client: figure sad @left "Client"
+  me: figure @right "You (consultant)"
+  client says "I need the\nsales dashboard\nLIVE." accent
+  me says "...define\n'live'?"
+panel "DirectQuery: live, with a bill" note "Live, but you pay for it on every click."
+  me: figure @left "You (consultant)"
+  rpt: box "Report"
+  db: box "Source\nDB"
+  rpt -> db "query"
+  me says "Every click = a query.\nSlow visuals, busy source."
+  stat "20 users x 6 clicks\n= 120 queries a minute" bad
+panel "The fix: Import + refresh" note "Ask 'how fresh?' before 'how live?'."
+  client: figure happy @left "Client"
+  rpt: box "Report\n(cached)" good
+  db: box "Source\nDB"
+  db -> rpt "every 15 min" good
+  client says "Fresh within 15 min?\nYes! That is live enough."
+  stat "Fast visuals,\nquiet source." good

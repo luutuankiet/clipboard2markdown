@@ -7,6 +7,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename, dirname, resolve } from 'path';
 import { buildSkeleton } from '../src/diagrams/skeleton.js';
+import { sketchToSkeleton, SKETCH_EXT } from '../src/sketch.js';
 import { saveScene } from '../src/diagrams/share-link.js';
 import { sceneToMermaid } from '../src/diagrams/scene-to-mermaid.js';
 import { lintScene, formatFinding, hasErrors, ALL_CLASSES, PAGE_PT } from '../src/lint.js';
@@ -23,6 +24,7 @@ Usage:
                                   draw into a working copy's images folder
   c2m excalidraw <file.mmd>       a Mermaid diagram instead (see MERMAID below)
   c2m excalidraw <shot.json>      an annotated screenshot (see DOODLE below)
+  c2m excalidraw <file.c2m>       a comic or doodle in the compact text format (see SKETCH below)
   c2m excalidraw --strict ...     refuse to draw or upload when the lint finds an error
   c2m lint <file>...              check only, any input: exit 1 on an error finding
                                   (same as c2m excalidraw --lint-only <file>...)
@@ -219,6 +221,26 @@ DOODLE (annotated screenshot: a JSON object with "image" and "notes")
   picture (excalidraw.com stores pictures apart from the link), so every
   doodle warns; the PNG is the deliverable.
 
+SKETCH (a comic or quick doodle in a compact text format: file.c2m or file.sketch)
+  One statement per line; indent = inside the preceding panel. # starts a comment.
+  Use it for strips and small explainers: it lays everything out for you (no
+  coordinates), so a 3-panel comic is about 20 lines instead of 150 of JSON.
+  strip [N cols]                        optional first line: panel grid width (default 2)
+  title "text"                          optional heading above the strip
+  panel "Title" [note "caption"]        starts a panel; the statements below belong to it
+  grid R x C                            optional: lay the panel's boxes in R rows x C columns
+  id: figure [sad|happy] [@left|@right] ["Label"]   stick figure with a name tag
+  id: box "Text" [marker]               rectangle; \\n breaks a line
+  a -> b ["label"] [marker]             arrow bound to two ids (labels are placed apart)
+  id says "text" [marker]               speech bubble above that figure/box
+  id thinks "text" [marker]             thought bubble (cloud tail)
+  stat "text" [marker]                  bold callout line at the panel bottom
+  note "text"                           small caption line inside the panel
+  markers: accent (blue), bad (red), good (green); anything else stays white.
+  Keep to <= 3 filled shapes and 2 colours per panel (lint g warns beyond that).
+  Errors name the line number and say how to fix it. Put the picture in the PNG:
+  c2m excalidraw --png <dir> --strict comic.c2m
+
 NOT SUPPORTED
   frames, freedraw, editing an existing link (use c2m diagrams edit for that),
   writing .excalidraw files, pictures in share links.
@@ -279,6 +301,7 @@ async function buildInputRaw(target, io) {
     var mermaid = await import('../src/mermaid-input.js');
     return Object.assign({ fence: 'mermaid' }, await mermaid.mermaidToScene(text));
   }
+  if (SKETCH_EXT.test(target)) return Object.assign({ fence: 'mermaid' }, toScene(sketchToSkeleton(text, target)));
   var input = parseJson(text);
   var doodle = await import('../src/doodle.js');
   if (doodle.isDoodleSpec(input)) {
@@ -314,13 +337,13 @@ function parseJson(text) {
 }
 
 function sceneName(target) {
-  return target === '-' ? 'diagram' : basename(target).replace(/\.(json|excalidraw|mmd|mermaid)$/i, '');
+  return target === '-' ? 'diagram' : basename(target).replace(/\.(json|excalidraw|mmd|mermaid|c2m|sketch)$/i, '');
 }
 
 // `--png` takes an optional folder: the next argument is the folder unless it
 // looks like an input (-, *.json, *.excalidraw) or an option.
 function looksLikeInput(a) {
-  return a === '-' || a.startsWith('--') || /\.(json|excalidraw|mmd|mermaid)$/i.test(a);
+  return a === '-' || a.startsWith('--') || /\.(json|excalidraw|mmd|mermaid|c2m|sketch)$/i.test(a);
 }
 
 // Returns the exit code. `io.fetch`, `io.stdin` and `io.env` exist for tests.
