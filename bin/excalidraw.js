@@ -9,6 +9,7 @@ import { basename, dirname, resolve } from 'path';
 import { buildSkeleton } from '../src/diagrams/skeleton.js';
 import { saveScene } from '../src/diagrams/share-link.js';
 import { sceneToMermaid } from '../src/diagrams/scene-to-mermaid.js';
+import { lintScene, formatFinding, hasErrors, ALL_CLASSES, PAGE_PT } from '../src/lint.js';
 
 export const EXCALIDRAW_HELP = `c2m excalidraw - turn a JSON diagram description into an excalidraw.com share link
 
@@ -22,6 +23,9 @@ Usage:
                                   draw into a working copy's images folder
   c2m excalidraw <file.mmd>       a Mermaid diagram instead (see MERMAID below)
   c2m excalidraw <shot.json>      an annotated screenshot (see DOODLE below)
+  c2m excalidraw --strict ...     refuse to draw or upload when the lint finds an error
+  c2m lint <file>...              check only, any input: exit 1 on an error finding
+                                  (same as c2m excalidraw --lint-only <file>...)
   c2m excalidraw --help           show this help
 
 OUTPUT (stdout, in this order)
@@ -123,6 +127,23 @@ PREVIEW
   larger labelled shape -> subgraph. Free text -> "%% note:" line. The preview
   shows structure only; Mermaid's layout is not your drawing's layout.
 
+LINT (every input: .mmd, element array, whole scene)
+  After the diagram is built, the finished scene is checked. Each finding is a
+  line "warning: lint <class> (error|warn): <what, and how to fix it>".
+  a  a node sticks out of its frame / subgraph, or straddles its edge
+  b  two nodes overlap (full nesting is fine)
+  c  a label shows a literal <br> or backslash-n instead of a line break
+  d  an arrow end is unbound, bound to a missing shape, or far off its outline
+  e  a label is wider or taller than its shape
+  f  text prints under 8 pt (warn under 10 pt) once the scene is scaled to the
+     page width: 468 pt, or --page-pt <n>
+  --strict   any error-level finding exits 1, prints the findings to stderr and
+             writes no PNG and makes no link. Use it in the loop: fix until clean.
+  c2m lint <file>...   (or --lint-only) prints one summary line and the findings
+             per file, draws and uploads nothing, exits 1 on any error.
+  Text widths are estimated (0.6 em per character), so lint can still miss real
+  clipping; look at --review for the first diagram of a document.
+
 WARNINGS
   overlap            two shapes partly overlap
   label does not fit the label's estimated size exceeds its shape minus padding
@@ -167,6 +188,10 @@ PNG (for pasting into a Google Doc): one command, then one write
 
 MERMAID (input file ending .mmd or .mermaid)
   c2m excalidraw --png flow.mmd seq.mmd
+  Authoring limits: <br>, <br/> and <br /> in a label become line breaks.
+  "flowchart LR" and "graph LR" are redrawn as TD, with a warning: left-to-right
+  layouts come out wider than a page and print too small. Subgraph frames are
+  fitted tightly around their nodes. Prefer TD chains; run with --strict.
   Mermaid's own layout, drawn as Excalidraw shapes in the house style's plan
   pass (white nodes, dark stroke, Excalifont). Flowcharts and sequence
   diagrams become editable shapes; other types (class, state, gantt ...) come
@@ -238,15 +263,15 @@ function toScene(input) {
     var built = buildSkeleton(input.elements);
     if (input.appState) built.scene.appState = input.appState;
     if (input.files) built.scene.files = input.files;
-    return built;
+    return Object.assign({ fromSkeleton: true }, built);
   }
-  return buildSkeleton(input);
+  return Object.assign({ fromSkeleton: true }, buildSkeleton(input));
 }
 
 // One input -> { scene, preview, warnings, fence }. A .mmd file is Mermaid; a
 // JSON object with "image" and "notes" is a doodle; anything else is the
 // element array or scene described in the help.
-async function buildInput(target, io) {
+async function buildInputRaw(target, io) {
   var text = readInput(target, io.stdin);
   if (/\.(mmd|mermaid)$/i.test(target)) {
     var mermaid = await import('../src/mermaid-input.js');
@@ -262,6 +287,20 @@ async function buildInput(target, io) {
     return Object.assign({ fence: 'text' }, await doodle.doodleToScene(input, bytes, render.loadExcalidraw));
   }
   return Object.assign({ fence: 'mermaid' }, toScene(input));
+}
+
+// Lint the finished scene, whatever input it came from. Element arrays and
+// shorthand scenes already get "overlap" and "label does not fit" warnings from
+// the skeleton builder, so those two classes are skipped for them unless the
+// caller wants every finding (--strict, lint-only).
+async function buildInput(target, io, opts) {
+  var built = await buildInputRaw(target, io);
+  var classes = built.fromSkeleton && !opts.all ? ALL_CLASSES.filter(function (c) { return c !== 'b' && c !== 'e'; }) : ALL_CLASSES;
+  var result = lintScene(built.scene, { pagePt: opts.pagePt, classes: classes });
+  built.findings = result.findings;
+  built.meta = result.meta;
+  built.warnings = built.warnings.concat(result.findings.map(formatFinding));
+  return built;
 }
 
 function parseJson(text) {
@@ -285,7 +324,7 @@ function looksLikeInput(a) {
 // Returns the exit code. `io.fetch`, `io.stdin` and `io.env` exist for tests.
 export async function runExcalidraw(argv, io) {
   var stdout = io.stdout, stderr = io.stderr;
-  var noUpload = false;
+  var noUpload = false, strict = false, lintOnly = false, pagePt = PAGE_PT;
   var png = false, pngDir = null, outDir = null, review = false;
   var targets = [];
   for (var i = 0; i < argv.length; i++) {
@@ -301,19 +340,29 @@ export async function runExcalidraw(argv, io) {
       png = true; outDir = argv[++i];
     } else if (a.startsWith('--out=')) { png = true; outDir = a.slice(6); }
     else if (a === '--review') review = true;
+    else if (a === '--strict') strict = true;
+    else if (a === '--lint-only') lintOnly = true;
+    else if (a === '--page-pt' || a.startsWith('--page-pt=')) {
+      var raw = a === '--page-pt' ? argv[++i] : a.slice(10);
+      pagePt = Number(raw);
+      if (!(pagePt > 0)) { stderr.write('c2m excalidraw: --page-pt needs a number of points, e.g. 468\n'); return 1; }
+    }
     else if (a.startsWith('--')) { stderr.write('c2m excalidraw: unknown option ' + a + '\n'); return 1; }
     else targets.push(a);
   }
-  if (png ? targets.length < 1 : targets.length !== 1) {
+  if (lintOnly ? targets.length < 1 : png ? targets.length < 1 : targets.length !== 1) {
     stderr.write('c2m excalidraw: expected ' + (png ? 'one or more <file.json>' : 'one <file.json>') +
       ' or - for stdin. See c2m excalidraw --help.\n');
     return 1;
   }
 
+  var lintOpts = { pagePt: pagePt, all: strict || lintOnly };
   try {
+    if (lintOnly) return await runLint(targets, lintOpts, io);
     if (png && pngDir !== null && outDir !== null) throw new Error('use --png <dir> or --out <dir>, not both');
-    if (png) return await runPng(targets, { dir: outDir !== null ? outDir : pngDir, folder: outDir !== null, review: review, noUpload: noUpload }, io);
-    var built = await buildInput(targets[0], io);
+    if (png) return await runPng(targets, { dir: outDir !== null ? outDir : pngDir, folder: outDir !== null, review: review, noUpload: noUpload, strict: strict, lint: lintOpts }, io);
+    var built = await buildInput(targets[0], io, lintOpts);
+    refuseOnErrors([{ name: targets[0], built: built }], strict);
     var url = noUpload ? null : await upload(built.scene, io.fetch);
     if (url) stdout.write(url + '\n');
     stdout.write('```' + built.fence + '\n' + built.preview + '\n```\n');
@@ -323,6 +372,37 @@ export async function runExcalidraw(argv, io) {
     stderr.write('c2m excalidraw: ' + (e && e.message ? e.message : e) + '\n');
     return 1;
   }
+}
+
+// --strict: any error-level finding stops the run before a PNG or a link is
+// made. Every input is reported, not just the first, so one pass shows the
+// whole list.
+function refuseOnErrors(items, strict) {
+  if (!strict) return;
+  var lines = [];
+  items.forEach(function (it) {
+    var errs = it.built.findings.filter(function (f) { return f.level === 'error'; });
+    if (errs.length) lines.push(it.name + ': ' + errs.length + ' error' + (errs.length === 1 ? '' : 's') + '\n' + errs.map(function (f) { return '  ' + formatFinding(f); }).join('\n'));
+  });
+  if (lines.length) throw new Error('--strict: lint found errors; nothing was drawn or uploaded\n' + lines.join('\n') + '\nFix the diagram and rerun, or drop --strict to accept the findings as warnings.');
+}
+
+// `c2m lint <file>...`: check only. One header line per input, then its
+// findings; exit 1 if any input has an error-level finding.
+async function runLint(targets, lintOpts, io) {
+  var failed = false;
+  for (var t = 0; t < targets.length; t++) {
+    var built = await buildInput(targets[t], io, lintOpts);
+    var m = built.meta;
+    io.stdout.write(targets[t] + ': ' + m.width + 'x' + m.height + ' px, min text ' + (m.minPt === null ? 'n/a' : m.minPt + ' pt at ' + lintOpts.pagePt + ' pt page width') +
+      ', ' + built.findings.length + ' finding' + (built.findings.length === 1 ? '' : 's') + '\n');
+    built.warnings.forEach(function (w) {
+      if (!/^lint /.test(w)) io.stdout.write('  warning: ' + w + '\n');
+    });
+    built.findings.forEach(function (f) { io.stdout.write('  ' + formatFinding(f) + '\n'); });
+    if (hasErrors(built.findings)) failed = true;
+  }
+  return failed ? 1 : 0;
 }
 
 async function runPng(targets, opts, io) {
@@ -336,9 +416,10 @@ async function runPng(targets, opts, io) {
   // last file costs no renders.
   var items = [];
   for (var t = 0; t < targets.length; t++) {
-    var built = await buildInput(targets[t], io);
-    items.push({ name: names[t], scene: built.scene, preview: built.preview, warnings: built.warnings, fence: built.fence });
+    var built = await buildInput(targets[t], io, opts.lint);
+    items.push({ name: names[t], scene: built.scene, preview: built.preview, warnings: built.warnings, fence: built.fence, built: built });
   }
+  refuseOnErrors(items, opts.strict);
 
   var render = await import('../src/excalidraw-png.js');
   var dir;

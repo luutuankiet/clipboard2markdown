@@ -1,0 +1,4 @@
+[
+  {"id": "a", "type": "rectangle", "x": 0, "y": 0, "width": 200, "height": 80, "label": "First"},
+  {"id": "b", "type": "rectangle", "x": 120, "y": 40, "width": 200, "height": 80, "label": "Second"}
+]

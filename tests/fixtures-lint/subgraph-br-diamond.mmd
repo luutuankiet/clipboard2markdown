@@ -1,0 +1,8 @@
+flowchart TD
+  subgraph S1[Source]
+    a[Raw files<br>from vendor] --> b{Valid?}
+  end
+  subgraph S2[Warehouse]
+    c[Stage table with a long label here]
+  end
+  b -->|yes| c

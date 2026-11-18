@@ -25,6 +25,8 @@ in a few seconds is skipped and its link left as written.
 
   c2m excalidraw <file|->   JSON diagram -> excalidraw.com share link and
                             Mermaid preview (see c2m excalidraw --help)
+  c2m lint <file>...        check diagrams (.mmd, .json, .excalidraw) for layout
+                            faults; exit 1 on any error (see c2m lint --help)
   c2m diagrams <command>    existing share links <-> Mermaid: expand, strip,
                             show, edit (see c2m diagrams --help)
 
@@ -148,6 +150,10 @@ if (isEntryPoint()) {
   if (args[0] === 'excalidraw') {
     const { runExcalidraw } = await import('./excalidraw.js');
     process.exit(await runExcalidraw(args.slice(1), { stdout: process.stdout, stderr: process.stderr }));
+  }
+  if (args[0] === 'lint') {
+    const { runExcalidraw } = await import('./excalidraw.js');
+    process.exit(await runExcalidraw(['--lint-only', ...args.slice(1)], { stdout: process.stdout, stderr: process.stderr }));
   }
   if (args[0] === 'diagrams') {
     const { main } = await import('./diagrams.js');
