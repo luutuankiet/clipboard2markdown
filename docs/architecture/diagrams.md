@@ -34,6 +34,7 @@ and the CLI; its only dependencies are `fetch`, WebCrypto and `pako`.
 | `bin/diagrams.js` | all | `c2m diagrams` (alias `c2m-diagrams`): `expand`, `strip`, `show`, `edit` |
 | `bin/excalidraw.js` | all | `c2m excalidraw`: skeleton -> upload -> link; its help text is the agent manual |
 | `src/excalidraw-png.js` | all | `--png`: scene -> SVG (vendored excalidraw under jsdom) -> PNG (resvg); cache clean-up, scale pick |
+| `src/lint.js` | all | `lintScene`: scene-level checks (frame, overlap, literal br, arrows, label fit, font at page width); called from every input path in `bin/excalidraw.js` |
 | `src/mermaid-input.js` | all | `.mmd` input: mermaid-to-excalidraw in the same jsdom, with estimated text sizes for mermaid's layout; house style; mid-word label wraps undone |
 | `src/doodle.js` | all | doodle input: picture plus margin notes and curved arrows; pure layout, notes never on the picture or each other |
 | `scripts/build-excalidraw-bundle.mjs` | all | builds `vendor/excalidraw/` (bundle + fonts, no CJK font) from the dev dependency |

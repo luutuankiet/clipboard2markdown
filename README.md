@@ -79,6 +79,13 @@ Per diagram it writes `<name>.png` (scale 3, lowered until the image has at most
 c2m excalidraw --png flow.mmd             # PNG + link + paste block
 ```
 
+**Lint and `--strict`** (every input): the finished scene is checked for a node sticking out of its subgraph frame, overlapping nodes, a literal `<br>` shown as text, unbound or floating arrows, text wider than its box, and text that would print under 8 pt at page width (468 pt, change with `--page-pt`). Findings print as `warning: lint ...` lines. `--strict` turns any error into exit 1 with no PNG and no link; `c2m lint <file>...` (or `c2m excalidraw --lint-only`) only checks. Mermaid input also turns `<br>` into line breaks, redraws `flowchart LR` / `graph LR` as TD (with a warning) and fits subgraph frames around their nodes.
+
+```bash
+c2m lint flow.mmd shot.json               # check only; exit 1 on an error
+c2m excalidraw --png --strict flow.mmd    # draw only if the lint is clean
+```
+
 **Annotated screenshots** (doodles): a JSON object naming a PNG or JPEG and a list of notes, each with a `target` point `[x, y]` or box `[x, y, w, h]` in the image's pixels and an optional `side`. Notes go in the margins in Excalidraw's hand font, never on the picture or on each other, with a curved arrow to each target. The share link opens without the picture (excalidraw.com stores pictures apart from the link); the PNG is complete. Full spec in `c2m excalidraw --help`, section DOODLE.
 
 ```bash
