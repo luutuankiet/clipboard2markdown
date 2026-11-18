@@ -79,6 +79,12 @@ Per diagram it writes `<name>.png` (scale 3, lowered until the image has at most
 c2m excalidraw --png flow.mmd             # PNG + link + paste block
 ```
 
+**Comics and doodles in a compact text format** (`c2m excalidraw <file>.c2m`, also `.sketch`): an agent writes about 20 lines (panels, stick figures, speech bubbles, boxes, arrows, a callout) and gets a laid-out comic in the house style, with no coordinates. The same link, PNG and paste block come out, and the lint runs on the result. A 3-panel strip is under 1,000 characters instead of roughly 7,600 characters of element JSON. Errors name the file, the line and a fix. Full grammar in `c2m excalidraw --help`, section SKETCH.
+
+```bash
+c2m excalidraw --strict --png comic.c2m   # panel "Title" / me: figure @left / me says "Hi" / a -> b "label"
+```
+
 **Lint and `--strict`** (every input): the finished scene is checked for a node sticking out of its subgraph frame, overlapping nodes, a literal `<br>` shown as text, unbound or floating arrows, text wider than its box, and text that would print under 8 pt at page width (468 pt, change with `--page-pt`). Findings print as `warning: lint ...` lines. `--strict` turns any error into exit 1 with no PNG and no link; `c2m lint <file>...` (or `c2m excalidraw --lint-only`) only checks. Mermaid input also turns `<br>` into line breaks, redraws `flowchart LR` / `graph LR` as TD (with a warning) and fits subgraph frames around their nodes.
 
 ```bash
