@@ -80,14 +80,19 @@ function labelOf(raw) {
   return null;
 }
 
-// Where the ray from a shape's centre towards `toward` leaves its bounding box.
-function edgePoint(el, toward) {
+// Where the ray from a shape's centre towards `toward` leaves the shape's
+// outline: the diamond's slanted sides and the ellipse's curve, not the
+// bounding box around them (a box point floats in empty space at a diamond's
+// corner).
+export function edgePoint(el, toward) {
   var cx = el.x + el.width / 2, cy = el.y + el.height / 2;
   var dx = toward[0] - cx, dy = toward[1] - cy;
   if (!dx && !dy) return [cx, cy];
-  var sx = dx ? (el.width / 2) / Math.abs(dx) : Infinity;
-  var sy = dy ? (el.height / 2) / Math.abs(dy) : Infinity;
-  var s = Math.min(sx, sy);
+  var hw = el.width / 2, hh = el.height / 2;
+  var s;
+  if (el.type === 'diamond') s = 1 / (Math.abs(dx) / hw + Math.abs(dy) / hh);
+  else if (el.type === 'ellipse') s = 1 / Math.sqrt((dx / hw) * (dx / hw) + (dy / hh) * (dy / hh));
+  else s = Math.min(dx ? hw / Math.abs(dx) : Infinity, dy ? hh / Math.abs(dy) : Infinity);
   return [cx + dx * s, cy + dy * s];
 }
 
