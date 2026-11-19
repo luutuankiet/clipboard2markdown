@@ -27,8 +27,10 @@ export const MARKERS = {
 const MOODS = ['ok', 'sad', 'happy'];
 const POSES = ['point', 'cheer', 'sit', 'shrug', 'run'];   // body; combine freely with a mood
 const PROPS = ['laptop', 'clock', 'server', 'coffee', 'doc'];   // line art beside a figure
-const MAXCOLS = 2;         // 3+ panels per row would print under 10 pt at 468 pt page width; extra panels wrap to the next row
+const MAXCOLS = 3;         // more than 3 panels per row would print under 10 pt at 468 pt page width; extra panels wrap to the next row
+const BOXCAP = 210;        // widest box text in px; longer labels wrap
 const SLOTS = ['@left', '@right', '@center'];
+const TOPSLOTS = ['@top-left', '@top-right', '@top'];   // a box on a row of its own at the top of the panel
 
 export const SKETCH_EXT = /\.(c2m|sketch)$/i;
 
@@ -79,6 +81,7 @@ export function parseSketch(source, file) {
         var w = word(i);
         if (w && MARKERS[w]) { if (o.marker) err('two colour markers on one line (' + o.marker + ', ' + w + ')', 'use only one of accent, bad, good'); o.marker = w; }
         else if (w && SLOTS.indexOf(w) >= 0 && allow.slot) o.slot = w.slice(1);
+        else if (w && TOPSLOTS.indexOf(w) >= 0 && allow.top) o.top = w === '@top' ? 'center' : w.slice(5);
         else if (w && MOODS.indexOf(w) >= 0 && allow.mood) o.mood = w;
         else if (w && POSES.indexOf(w) >= 0 && allow.mood) o.pose = w;
         else if (w && PROPS.indexOf(w) >= 0 && allow.mood) o.prop = w;
@@ -167,9 +170,9 @@ export function parseSketch(source, file) {
         target.push({ kind: 'box', same: true, id: w0, label: lead(rs2.words[0].v), marker: rs2.marker, bold: rs2.bold, small: rs2.small, line: line }); return;
       }
       if (kind === 'box') {
-        var rx = rest(3, {});
-        if (rx.words.length !== 1 || !rx.words[0].q) err('a box needs one quoted label', 'write: db: box "Source\\nDB" good');
-        target.push({ kind: 'box', id: w0, label: lead(rx.words[0].v), marker: rx.marker, bold: rx.bold, small: rx.small, line: line }); return;
+        var rx = rest(3, { top: true });
+        if (rx.words.length !== 1 || !rx.words[0].q) err('a box needs one quoted label', 'write: db: box "Source\\nDB" good [@top-right]');
+        target.push({ kind: 'box', top: rx.top, id: w0, label: lead(rx.words[0].v), marker: rx.marker, bold: rx.bold, small: rx.small, line: line }); return;
       }
       err('unknown kind "' + kind + '" after "' + w0 + ':"', 'use figure, box or same');
     }
@@ -331,7 +334,8 @@ function layoutBody(stmts, W, scope, grid, file, reg, need) {
   var P = function (id) { return scope + id; };
   var figs = stmts.filter(function (s) { return s.kind === 'figure'; });
   var bubbles = stmts.filter(function (s) { return s.kind === 'bubble'; });
-  var boxes = stmts.filter(function (s) { return s.kind === 'box' && !s.same; });
+  var boxes = stmts.filter(function (s) { return s.kind === 'box' && !s.same && !s.top; });
+  var tops = stmts.filter(function (s) { return s.kind === 'box' && s.top && !s.same; });
   var fixed = stmts.filter(function (s) { return s.kind === 'box' && s.same; });
   var edges = stmts.filter(function (s) { return s.kind === 'edge'; });
   var bars = stmts.filter(function (s) { return s.kind === 'bar'; });
@@ -367,7 +371,30 @@ function layoutBody(stmts, W, scope, grid, file, reg, need) {
   });
   boxBubbles.forEach(function (b) { b.fig.bub = b; });
 
+  var pushBox = function (b) {
+    var col = b.marker && MARKERS[b.marker];
+    shapeText(mk, { id: P(b.id), type: 'rectangle', x: b.x, y: b.y, width: b.w, height: b.h, strokeWidth: sw(b), backgroundColor: col ? col.fill : '#ffffff' }, b.blk);
+  };
   var y = 0;
+  // 0. boxes with @top-left, @top-right or @top (centre): a row of their own above everything
+  tops.forEach(function (b) {
+    b.blk = block(b.label, b.small, BOXCAP);
+    var nd = need[b.id] || { w: 0, h: 0 };
+    b.w = Math.max(80, b.blk.w + 24, nd.w); b.h = Math.max(52, b.blk.h + 24, nd.h);
+    if (stmts.some(function (s) { return s.kind === 'bubble' && s.who === b.id; })) fail(file, b.line, '', 'a box with @top-' + (b.top === 'center' ? 'center' : b.top) + ' cannot have a bubble', 'let a figure speak instead, or drop the slot');
+  });
+  var pinnedTop = fixed.filter(function (b) { return reg[b.id] && reg[b.id].top; });
+  if (tops.length || pinnedTop.length) {
+    var tbands = {};
+    tops.forEach(function (b) { if (tbands[b.top]) fail(file, b.line, '', 'two boxes at the same top slot', 'give each box its own @top-left, @top-right or @top'); tbands[b.top] = 1; });
+    var th = Math.max.apply(null, tops.map(function (b) { return b.h; }).concat(pinnedTop.map(function (b) { return reg[b.id].h; })));
+    tops.forEach(function (b) {
+      b.x = b.top === 'left' ? M : b.top === 'right' ? W - M - b.w : Math.round((W - b.w) / 2); b.y = 0;
+      pushBox(b);
+      if (b.id) reg[b.id] = { x: b.x, y: b.y, w: b.w, h: b.h, top: true };
+    });
+    y = th + 34;
+  }
   // 1. figure bubbles, stacked in statement order. Each bubble leans toward its
   // speaker, and its width is cut so that no earlier bubble's tail runs through it.
   var tails = [];
@@ -477,27 +504,23 @@ function layoutBody(stmts, W, scope, grid, file, reg, need) {
       mk.push({ id: mk.id('tail'), type: 'line', x: btx - 9, y: by2, points: [[0, 0], [tipX - btx + 9, tip - by2], [18, 0]], strokeWidth: 2 });
     }
   };
-  var pushBox = function (b) {
-    var col = b.marker && MARKERS[b.marker];
-    shapeText(mk, { id: P(b.id), type: 'rectangle', x: b.x, y: b.y, width: b.w, height: b.h, strokeWidth: sw(b), backgroundColor: col ? col.fill : '#ffffff' }, b.blk);
-  };
   var fixedBottom = y, boxTop = y;
   fixed.forEach(function (b) {
     var r = reg[b.id];
     if (!r) fail(file, b.line, '', '"' + b.id + '" is repeated with same, but no earlier panel declares it', 'declare it first in an earlier panel:  ' + b.id + ': box "Label"   (then ' + b.id + ': same "New label" in a later panel)');
-    b.blk = block(b.label, b.small, Infinity);
+    b.blk = block(b.label, b.small, BOXCAP);
     b.x = r.x; b.y = r.y; b.w = r.w; b.h = r.h;
     var lower = function (req, line) {      // this panel needs the box lower than the first panel put it: the build is redone once with the box lowered there
       if (b.y >= req) return;
       if (need.final) fail(file, line, '', 'the box "' + b.id + '" cannot sit at the same place in this panel', 'take a figure or a bubble out of this panel');
       need[b.id].y = Math.max(need[b.id].y || 0, req); need.dirty = true;
     };
-    lower(boxTop, b.line); b.lower = lower;
+    if (r.top) { b.lower = function () {}; } else { lower(boxTop, b.line); b.lower = lower; }
     fixedBottom = Math.max(fixedBottom, b.y + b.h + SECTION);
   });
   if (boxes.length) {
     boxes.forEach(function (b) {
-      b.blk = block(b.label, b.small, Infinity);
+      b.blk = block(b.label, b.small, BOXCAP);
       var nd = need[b.id] || { w: 0, h: 0 };
       b.w = Math.max(80, b.blk.w + 24, nd.w); b.h = Math.max(52, b.blk.h + 24, nd.h);
     });
@@ -630,11 +653,12 @@ export function sketchToElements(doc, file) {
 function build(doc, file, need) {
   var out = [];
   var cols = Math.min(doc.cols, MAXCOLS, Math.max(1, doc.panels.length));
+  var PW = cols >= 3 ? 226 : 256, PGAP = 32;    // 3 panels in a row are narrower so the text still prints at 10 pt
   var width = doc.panels.length ? cols * PW + (cols - 1) * PGAP : 520;
   var y = 0, reg = {}, again = {};
   var scan = function (stmts) { stmts.forEach(function (st) { if (st.kind === 'box' && st.same) again[st.id] = 1; }); };
   scan(doc.body); doc.panels.forEach(function (p) { scan(p.stmts); });
-  var want = function (stmts) { stmts.forEach(function (st) { if (st.kind === 'box' && again[st.id]) { var bl = block(st.label, st.small, Infinity), n0 = need[st.id] || { w: 0, h: 0 }; need[st.id] = { w: Math.max(n0.w, bl.w + 24), h: Math.max(n0.h, bl.h + 24), y: n0.y || 0 }; } }); };
+  var want = function (stmts) { stmts.forEach(function (st) { if (st.kind === 'box' && again[st.id]) { var bl = block(st.label, st.small, BOXCAP), n0 = need[st.id] || { w: 0, h: 0 }; need[st.id] = { w: Math.max(n0.w, bl.w + 24), h: Math.max(n0.h, bl.h + 24), y: n0.y || 0 }; } }); };
   want(doc.body); doc.panels.forEach(function (p) { want(p.stmts); });
   if (doc.title) {
     var t = wrap(doc.title, chars(width)), s = size(t);

@@ -416,8 +416,9 @@ export function lintSkeleton(normalized) {
   });
 
   // Two arrows that share a shape meet there by design; only a crossing
-  // between unrelated arrows is a tangle.
-  var arrows = normalized.arrows.filter(function (a) { return a.el.type === 'arrow' || a.el.type === 'line'; });
+  // between unrelated arrows is a tangle. Check and cross strokes drawn by
+  // sketches (ids ending in markN) are glyphs, not connectors.
+  var arrows = normalized.arrows.filter(function (a) { return a.el.type === 'arrow' || (a.el.type === 'line' && !/mark\d+$/.test(String(a.el.id))); });
   for (var x = 0; x < arrows.length; x++) {
     for (var y = x + 1; y < arrows.length; y++) {
       var p = arrows[x], q = arrows[y];
