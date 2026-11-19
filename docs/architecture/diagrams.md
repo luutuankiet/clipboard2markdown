@@ -36,7 +36,7 @@ and the CLI; its only dependencies are `fetch`, WebCrypto and `pako`.
 | `src/excalidraw-png.js` | all | `--png`: scene -> SVG (vendored excalidraw under jsdom) -> PNG (resvg); cache clean-up, scale pick |
 | `src/lint.js` | all | `lintScene`: scene-level checks (frame, overlap, literal br, arrows, label fit, font at page width); called from every input path in `bin/excalidraw.js` |
 | `src/mermaid-input.js` | all | `.mmd` input: mermaid-to-excalidraw in the same jsdom, with estimated text sizes for mermaid's layout; house style; mid-word label wraps undone |
-| `src/sketch.js` | all | `.c2m` / `.sketch` input: `parseSketch` (line-numbered errors with a fix hint), `layoutBody`, `sketchToSkeleton` -> element array for `buildSkeleton`; fixed 16 px text and 256 px panels so it prints at about 14 pt |
+| `src/sketch.js` | all | `.c2m` / `.sketch` input: `parseSketch` (line-numbered errors with a fix hint), `layoutBody`, `sketchToSkeleton` -> element array for `buildSkeleton`; fixed 16 px text (12 px for `small` and `~` lines), panels up to 3 per row (226 px wide at 3, so text prints at 10 pt or more); also poses, props, bars, grids, `same`, drawn check/cross marks, and `@top-*` box slots |
 | `src/doodle.js` | all | doodle input: picture plus margin notes and curved arrows; pure layout, notes never on the picture or each other |
 | `scripts/build-excalidraw-bundle.mjs` | all | builds `vendor/excalidraw/` (bundle + fonts, no CJK font) from the dev dependency |
 | `clipboard2markdown.js` | ~564-625 | page mode: paste handling and progress |

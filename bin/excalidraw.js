@@ -225,7 +225,7 @@ SKETCH (a comic or quick doodle in a compact text format: file.c2m or file.sketc
   One statement per line; indent = inside the preceding panel. # starts a comment.
   Use it for strips and small explainers: it lays everything out for you (no
   coordinates), so a 3-panel comic is about 20 lines instead of 150 of JSON.
-  strip [N cols]                        optional first line: panel grid width (default 2)
+  strip [N cols]                        optional first line: panels per row (default 2, at most 3 per row)
   title "text"                          optional heading above the strip
   panel "Title" [note "caption"]        starts a panel; the statements below belong to it
   grid R x C                            optional: lay the panel's boxes in R rows x C columns
@@ -236,6 +236,17 @@ SKETCH (a comic or quick doodle in a compact text format: file.c2m or file.sketc
   id thinks "text" [marker]             thought bubble (cloud tail)
   stat "text" [marker]                  bold callout line at the panel bottom
   note "text"                           small caption line inside the panel
+  id: figure point|cheer|sit|shrug|run   pose; combine with a mood: me: figure sad shrug
+  id: figure sit laptop                  prop: laptop, clock, server, coffee or doc
+  me -> db "asks"                        arrows may start or end on figures too
+  db says "ready"                        a box can speak: bubble above the box
+  b: box "Big" bold                      bold: thick strokes (box) or underline (stat)
+  bar "Q1" 4                           bar scaled to the largest bar in the panel
+  grid 2 cols  |  grid 2 x 2             lay the boxes out in columns / rows x columns
+  b: same "Cancelled"                   repeat a box of an earlier panel, same place and size
+  note "tiny" small                     small text; in a box label a line starting "~ " is small
+  b: box "✓ Passed\\n✗ Failed"          ✓/✗ at the start of a line become drawn marks
+  b: box "Build" @top-right             @top-left, @top, @top-right: box on its own row above the figures
   markers: accent (blue), bad (red), good (green); anything else stays white.
   Keep to <= 3 filled shapes and 2 colours per panel (lint g warns beyond that).
   Errors name the line number and say how to fix it. Put the picture in the PNG:

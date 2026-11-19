@@ -81,6 +81,23 @@ c2m excalidraw --png flow.mmd             # PNG + link + paste block
 
 **Comics and doodles in a compact text format** (`c2m excalidraw <file>.c2m`, also `.sketch`): an agent writes about 20 lines (panels, stick figures, speech bubbles, boxes, arrows, a callout) and gets a laid-out comic in the house style, with no coordinates. The same link, PNG and paste block come out, and the lint runs on the result. A 3-panel strip is under 1,000 characters instead of roughly 7,600 characters of element JSON. Errors name the file, the line and a fix. Full grammar in `c2m excalidraw --help`, section SKETCH.
 
+One line per statement, beyond panels, figures, bubbles, boxes and arrows:
+
+| statement | example |
+| :-- | :-- |
+| box says | `db says "ready"` |
+| arrow to a figure | `me -> db "asks"` |
+| pose | `me: figure sad shrug @left` (point, cheer, sit, shrug, run) |
+| prop | `me: figure sit laptop` (laptop, clock, server, coffee, doc) |
+| bold | `b: box "Big" bold` |
+| bar | `bar "Q1" 4` |
+| grid | `grid 2 x 2` or `grid 2 cols` |
+| same | `b: same "Cancelled"` (same place and size as in an earlier panel) |
+| small and ~ | `note "tiny" small`, or `~ (skipped)` as a line in a box label |
+| marks | `b: box "✓ Passed\n✗ Failed"` |
+| top slots | `b: box "Build" @top-right` (@top-left, @top, @top-right; 3 panels per row at most) |
+
+
 ```bash
 c2m excalidraw --strict --png comic.c2m   # panel "Title" / me: figure @left / me says "Hi" / a -> b "label"
 ```
