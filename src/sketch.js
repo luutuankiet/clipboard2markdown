@@ -69,7 +69,7 @@ export function parseSketch(source, file) {
       return t;
     };
     var lead = function (t) {
-      String(t).split('\n').forEach(function (l) { var m = MARK_RE.exec(l); if (MARK_ANY.test(m ? l.slice(m[0].length) : l)) err('a check or cross mark must start a line', 'move it to the start:  "\u2713 text"; one mark per line, \\n between lines'); });
+      String(t).split('\n').forEach(function (l) { l = l.replace(TILDE_RE, ''); var m = MARK_RE.exec(l); if (MARK_ANY.test(m ? l.slice(m[0].length) : l)) err('a check or cross mark must start a line', 'move it to the start:  "\u2713 text"; one mark per line, \\n between lines'); });
       return t;
     };
     // trailing markers and slots, in any order
@@ -204,28 +204,66 @@ function size(text, fs) {
 }
 
 // Check and cross marks. The font has no glyphs for them, so a line that starts
-// with one is drawn as strokes in a column to the left of the text.
-var MARK_RE = /^\s*([\u2713\u2714\u2717\u2718\u2715])\s*/;
-var MARK_ANY = /[\u2713\u2714\u2717\u2718\u2715]/;
+// with one is drawn as strokes in a column to the left of the text. A line that
+// starts with ~ is small (SMALL px) even when the statement is not.
+var MARK_RE = /^\s*([✓✔✗✘✕])\s*/;
+var MARK_ANY = /[✓✔✗✘✕]/;
+var TILDE_RE = /^\s*~\s?/;
 var MARK_W = 28;            // extra width a text with marks needs
-function wrapMarked(text, maxChars) {
-  var marks = [], lines = [];
-  String(text).split('\n').forEach(function (para) {
-    var m = MARK_RE.exec(para), w = wrap(m ? para.slice(m[0].length) : para, maxChars).split('\n');
-    if (m) marks.push({ line: lines.length, ok: '\u2713\u2714'.indexOf(m[1]) >= 0 });
-    lines = lines.concat(w);
+
+// Text -> lines with their own font size and optional mark. maxPx is the room for
+// the text; a marked block gives up MARK_W of it to the mark column.
+function block(text, small, maxPx) {
+  var marked = false, raw = [], lines = [];
+  String(text).split('\n').forEach(function (p) {
+    var sm = !!small, t = TILDE_RE.exec(p), mark = null;
+    if (t) { sm = true; p = p.slice(t[0].length); }
+    var m = MARK_RE.exec(p);
+    if (m) { mark = '✓✔'.indexOf(m[1]) >= 0 ? 'ok' : 'x'; p = p.slice(m[0].length); marked = true; }
+    raw.push({ p: p, fs: sm ? SMALL : FS, mark: mark });
   });
-  return { text: lines.join('\n'), marks: marks };
+  raw.forEach(function (r) {
+    wrap(r.p, chars(maxPx - (marked ? MARK_W : 0), r.fs)).split('\n').forEach(function (t, i) { lines.push({ t: t, fs: r.fs, mark: i === 0 ? r.mark : null }); });
+  });
+  var w = 0, h = 0;
+  lines.forEach(function (l) { w = Math.max(w, l.t.length * CW * l.fs); h += LH * l.fs; });
+  return { lines: lines, marked: marked, mixed: lines.some(function (l) { return l.fs !== lines[0].fs; }), w: Math.ceil(w) + (marked ? MARK_W : 0), h: Math.ceil(h) };
 }
-function drawMarks(mk, marks, x, y0, fs, ink) {
-  marks.forEach(function (m) {
-    var cy = y0 + (m.line + 0.5) * LH * fs, s = fs * 0.85, c = ink || INK;
-    if (m.ok) mk.push({ id: mk.id('mark'), type: 'line', x: x, y: cy, points: [[0, 0], [s * 0.3, s * 0.4], [s * 0.9, -s * 0.5]], strokeWidth: 3, strokeColor: c });
-    else {
-      mk.push({ id: mk.id('mark'), type: 'line', x: x, y: cy - s * 0.4, points: [[0, 0], [s * 0.8, s * 0.8]], strokeWidth: 3, strokeColor: c });
-      mk.push({ id: mk.id('mark'), type: 'line', x: x + s * 0.8, y: cy - s * 0.4, points: [[0, 0], [-s * 0.8, s * 0.8]], strokeWidth: 3, strokeColor: c });
-    }
+function drawMark(mk, ok, x, cy, fs, ink) {
+  var s = fs * 0.85, c = ink || INK;
+  if (ok) mk.push({ id: mk.id('mark'), type: 'line', x: x, y: cy, points: [[0, 0], [s * 0.3, s * 0.4], [s * 0.9, -s * 0.5]], strokeWidth: 3, strokeColor: c });
+  else {
+    mk.push({ id: mk.id('mark'), type: 'line', x: x, y: cy - s * 0.4, points: [[0, 0], [s * 0.8, s * 0.8]], strokeWidth: 3, strokeColor: c });
+    mk.push({ id: mk.id('mark'), type: 'line', x: x + s * 0.8, y: cy - s * 0.4, points: [[0, 0], [-s * 0.8, s * 0.8]], strokeWidth: 3, strokeColor: c });
+  }
+}
+// Put a block of text in the area [bx, bx + bw] with its top at by. One text
+// element when every line is alike; one per line when sizes differ or marks are drawn.
+function emit(mk, blk, bx, by, bw, o) {
+  var ink = o && o.ink, left = o && o.align === 'left';
+  if (!blk.marked && !blk.mixed) {
+    mk.push({ id: mk.id('txt'), type: 'text', x: Math.round(left ? bx : bx + (bw - blk.w) / 2), y: by, text: blk.lines.map(function (l) { return l.t; }).join('\n'), fontSize: blk.lines[0].fs, strokeColor: ink || INK, textAlign: left ? 'left' : 'center' });
+    return;
+  }
+  var y = by, x0 = left ? bx : bx + (bw - blk.w) / 2;
+  blk.lines.forEach(function (l) {
+    var lh = LH * l.fs, lw = Math.ceil(l.t.length * CW * l.fs);
+    var tx = blk.marked ? x0 + MARK_W : (left ? bx : bx + (bw - lw) / 2);
+    if (l.t) mk.push({ id: mk.id('txt'), type: 'text', x: Math.round(tx), y: y, text: l.t, fontSize: l.fs, strokeColor: ink || INK, textAlign: 'left' });
+    if (l.mark) drawMark(mk, l.mark === 'ok', x0 + 2, y + lh / 2, l.fs, ink);
+    y += lh;
   });
+}
+// A rectangle or ellipse with its text: a bound label when the text is plain,
+// loose text laid over the shape otherwise.
+function shapeText(mk, shape, blk) {
+  if (!blk.marked && !blk.mixed) {
+    shape.label = { text: blk.lines.map(function (l) { return l.t; }).join('\n'), fontSize: blk.lines[0].fs };
+    mk.push(shape);
+  } else {
+    mk.push(shape);
+    emit(mk, blk, shape.x, shape.y + (shape.height - blk.h) / 2, shape.width, {});
+  }
 }
 
 function Maker(prefix) {
@@ -285,12 +323,16 @@ function drawProp(mk, name, x, y) {
 
 // ---- layout ---------------------------------------------------------------
 
-function layoutBody(stmts, W, scope, grid, file) {
+// reg remembers where each box landed (x, y, w, h inside its panel) so a later
+// `id: same "Label"` can repeat it; need holds the widest label of every id that
+// is repeated, so the original is drawn big enough for all of its labels.
+function layoutBody(stmts, W, scope, grid, file, reg, need) {
   var mk = Maker(scope + 'e');
   var P = function (id) { return scope + id; };
   var figs = stmts.filter(function (s) { return s.kind === 'figure'; });
   var bubbles = stmts.filter(function (s) { return s.kind === 'bubble'; });
-  var boxes = stmts.filter(function (s) { return s.kind === 'box'; });
+  var boxes = stmts.filter(function (s) { return s.kind === 'box' && !s.same; });
+  var fixed = stmts.filter(function (s) { return s.kind === 'box' && s.same; });
   var edges = stmts.filter(function (s) { return s.kind === 'edge'; });
   var bars = stmts.filter(function (s) { return s.kind === 'bar'; });
   var stats = stmts.filter(function (s) { return s.kind === 'stat'; });
@@ -334,9 +376,8 @@ function layoutBody(stmts, W, scope, grid, file) {
     var lo = M, hi = W - M;
     tails.forEach(function (t) { if ((t[0] + t[1]) / 2 < f.cx) lo = Math.max(lo, t[1] + 8); else hi = Math.min(hi, t[0] - 8); });
     if (hi - lo < 70) fail(file, b.line, '', 'the bubble for "' + b.who + '" has no room beside the other speakers tails', 'move one speaker to its own panel, or give the figures @left and @right');
-    var text = wrap(b.text, chars(((hi - lo) / k) - 20));
-    var s = size(text);
-    b.text2 = text;
+    var s = block(b.text, b.small, ((hi - lo) / k) - 20);
+    b.blk = s;
     b.w = Math.min(hi - lo, Math.ceil((s.w + 20) * k) + (b.think ? 8 : 0));
     b.h = Math.ceil((s.h + 20) * k);
     var x = f.slot === 'left' ? M : f.slot === 'right' ? W - M - b.w : Math.round((W - b.w) / 2);
@@ -354,8 +395,8 @@ function layoutBody(stmts, W, scope, grid, file) {
   figBubbles.forEach(function (b) {
     var f = b.fig, col = b.marker && MARKERS[b.marker];
     var by = b.y + b.h, tx = b.tx, tipY = figTop - 6;
-    mk.push({ id: P(b.who + '_' + (b.think ? 'thinks' : 'says')), type: b.think ? 'ellipse' : 'rectangle', x: b.x, y: b.y, width: b.w, height: b.h, strokeWidth: sw(b),
-      backgroundColor: col ? col.fill : '#ffffff', label: { text: b.text2, fontSize: FS } });
+    shapeText(mk, { id: P(b.who + '_' + (b.think ? 'thinks' : 'says')), type: b.think ? 'ellipse' : 'rectangle', x: b.x, y: b.y, width: b.w, height: b.h, strokeWidth: sw(b),
+      backgroundColor: col ? col.fill : '#ffffff' }, b.blk);
     if (b.think) {
       [[0.62, 9], [0.8, 6], [0.95, 4]].forEach(function (d) {
         var py = by + (tipY - by) * d[0];
@@ -404,34 +445,84 @@ function layoutBody(stmts, W, scope, grid, file) {
   if (figs.length) y = figTop + figH + SECTION;
   else if (figBubbles.length) y = figTop;
 
-  // 3. boxes, their bubbles and the arrows
+  // 3. boxes, their bubbles and the arrows. `same` boxes are pinned to where the
+  // original sat; new boxes in the panel flow below them.
+  var rx = M, rw = W - 2 * M, side = null, bwMax = 0, bhMax = 0, cols = 1, pitch = 0, rows = 0;
+  var prepBub = function (b, linked, cap, linkW) {
+    var bb = b.bub, k = bb.think ? Math.SQRT2 : 1;
+    bb.linked = linked;
+    bb.blk = block(bb.text, bb.small, (linked ? Math.min(cap, linkW) : cap) / k - 20);
+    bb.w = Math.min(cap, Math.ceil((bb.blk.w + 20) * k) + (bb.think ? 8 : 0));
+    bb.h = Math.ceil((bb.blk.h + 20) * k);
+  };
+  var drawBub = function (b) {
+    var bb = b.bub;
+    if (!bb) return;
+    var bcol = bb.marker && MARKERS[bb.marker], mid = b.x + b.w / 2;
+    bb.y = b.y - 26 - bb.h;
+    if (bb.linked) {
+      var leftRoom = (mid - 12) - rx, rightRoom = (rx + rw) - (mid + 12);
+      bb.x = leftRoom >= rightRoom ? Math.round(mid - 12 - bb.w) : Math.round(mid + 12);
+    } else bb.x = Math.round(Math.max(rx, Math.min(rx + rw - bb.w, mid - bb.w / 2)));
+    bb.x = Math.max(M, Math.min(W - M - bb.w, bb.x));
+    var tipX = bb.linked ? (bb.x < mid ? b.x + b.w * 0.25 : b.x + b.w * 0.75) : mid;
+    var btx = Math.max(bb.x + 14, Math.min(bb.x + bb.w - 14, tipX)), by2 = bb.y + bb.h, tip = b.y - 4;
+    shapeText(mk, { id: P(b.id + '_' + (bb.think ? 'thinks' : 'says')), type: bb.think ? 'ellipse' : 'rectangle', x: bb.x, y: bb.y, width: bb.w, height: bb.h, strokeWidth: sw(bb),
+      backgroundColor: bcol ? bcol.fill : '#ffffff' }, bb.blk);
+    if (bb.think) {
+      [[0.3, 9], [0.62, 6], [0.9, 4]].forEach(function (d) {
+        mk.push({ id: mk.id('dot'), type: 'line', x: btx + (tipX - btx) * d[0], y: by2 + (tip - by2) * d[0], points: [[0, 0], [1, 0]], strokeWidth: d[1] });
+      });
+    } else {
+      mk.push({ id: mk.id('tail'), type: 'line', x: btx - 9, y: by2, points: [[0, 0], [tipX - btx + 9, tip - by2], [18, 0]], strokeWidth: 2 });
+    }
+  };
+  var pushBox = function (b) {
+    var col = b.marker && MARKERS[b.marker];
+    shapeText(mk, { id: P(b.id), type: 'rectangle', x: b.x, y: b.y, width: b.w, height: b.h, strokeWidth: sw(b), backgroundColor: col ? col.fill : '#ffffff' }, b.blk);
+  };
+  var fixedBottom = y, boxTop = y;
+  fixed.forEach(function (b) {
+    var r = reg[b.id];
+    if (!r) fail(file, b.line, '', '"' + b.id + '" is repeated with same, but no earlier panel declares it', 'declare it first in an earlier panel:  ' + b.id + ': box "Label"   (then ' + b.id + ': same "New label" in a later panel)');
+    b.blk = block(b.label, b.small, Infinity);
+    b.x = r.x; b.y = r.y; b.w = r.w; b.h = r.h;
+    var lower = function (req, line) {      // this panel needs the box lower than the first panel put it: the build is redone once with the box lowered there
+      if (b.y >= req) return;
+      if (need.final) fail(file, line, '', 'the box "' + b.id + '" cannot sit at the same place in this panel', 'take a figure or a bubble out of this panel');
+      need[b.id].y = Math.max(need[b.id].y || 0, req); need.dirty = true;
+    };
+    lower(boxTop, b.line); b.lower = lower;
+    fixedBottom = Math.max(fixedBottom, b.y + b.h + SECTION);
+  });
   if (boxes.length) {
     boxes.forEach(function (b) {
-      var s = size(b.label);
-      b.w = Math.max(80, s.w + 24); b.h = Math.max(52, s.h + 24);
+      b.blk = block(b.label, b.small, Infinity);
+      var nd = need[b.id] || { w: 0, h: 0 };
+      b.w = Math.max(80, b.blk.w + 24, nd.w); b.h = Math.max(52, b.blk.h + 24, nd.h);
     });
-    var bwMax = Math.max.apply(null, boxes.map(function (b) { return b.w; }));
-    var bhMax = Math.max.apply(null, boxes.map(function (b) { return b.h; }));
-    var rx = M, rw = W - 2 * M, side = null;
+    bwMax = Math.max.apply(null, boxes.map(function (b) { return b.w; }));
+    bhMax = Math.max.apply(null, boxes.map(function (b) { return b.h; }));
     var sides = figs.map(function (f) { return f.slot; }).filter(function (s, i, a) { return a.indexOf(s) === i; });
     if (figs.length && sides.length === 1 && sides[0] !== 'center' && !grid) {
       var edgeL = Math.max.apply(null, figs.map(function (f) { return f.cx + f.hw; })) + 10;
       var edgeR = Math.min.apply(null, figs.map(function (f) { return f.cx - f.hw; })) - 10;
       var r0 = sides[0] === 'left' ? edgeL : M, r1 = sides[0] === 'left' ? W - M : edgeR;
       var room = (r1 - r0) - bwMax / 2 - 10;
-      var labelsFit = edges.every(function (e) { var s = size(wrap(e.label || 'x', chars(room))); return s.n <= 3; });
-      if (bwMax <= r1 - r0 && labelsFit) { side = sides[0]; rx = r0; rw = r1 - r0; }
+      var labelsFit = edges.every(function (e) { var s = size(wrap(e.label || 'x', chars(room, e.small ? SMALL : FS)), e.small ? SMALL : FS); return s.n <= 3; });
+      if (bwMax <= r1 - r0 && labelsFit && !fixed.length) { side = sides[0]; rx = r0; rw = r1 - r0; }
     }
-    var n = boxes.length, cols = grid || (side ? 1 : (n * bwMax + (n - 1) * 90 <= rw ? n : 1));
+    var n = boxes.length;
+    cols = grid || (side ? 1 : (n * bwMax + (n - 1) * 90 <= rw ? n : 1));
     cols = Math.min(cols, n);
     while (cols > 1 && cols * bwMax + (cols - 1) * 50 > rw) cols--;     // an explicit grid still has to fit the panel
     var labelH = 0;
-    edges.forEach(function (e) { if (e.label) labelH = Math.max(labelH, size(wrap(e.label, chars(side ? rw - bwMax / 2 - 10 : 130))).h); });
+    edges.forEach(function (e) { if (e.label) { var efs = e.small ? SMALL : FS; labelH = Math.max(labelH, size(wrap(e.label, chars(side ? rw - bwMax / 2 - 10 : 130, efs)), efs).h); } });
     var gy = Math.max(64, labelH ? labelH + 28 : 0);
     var gx = cols > 1 ? Math.max(cols * bwMax + (cols - 1) * 90 <= rw ? 90 : 50, Math.min(130, (rw - cols * bwMax) / (cols - 1))) : 0;
     var totalW = cols * bwMax + (cols - 1) * gx;
     var x0 = side === 'left' ? rx : side === 'right' ? rx + rw - totalW : rx + (rw - totalW) / 2;
-    var rows = Math.ceil(n / cols), pitch = bwMax + gx;
+    rows = Math.ceil(n / cols); pitch = bwMax + gx;
     boxes.forEach(function (b, i) { b.c = i % cols; b.r = Math.floor(i / cols); });
 
     // bubbles that sit above a box: a box with an arrow coming in from the row above
@@ -439,56 +530,39 @@ function layoutBody(stmts, W, scope, grid, file) {
     var rowExtra = [];
     for (var ri = 0; ri < rows; ri++) rowExtra[ri] = 0;
     boxes.forEach(function (b) {
-      var bb = b.bub;
-      if (!bb) return;
+      if (!b.bub) return;
       var linked = edges.some(function (e) { var o = e.from === b.id ? ids[e.to] : e.to === b.id ? ids[e.from] : null; return o && o.kind === 'box' && o.r < b.r; });
       var cap = Math.min(rw, 210);
       if (cols > 1) cap = Math.min(cap, Math.floor(pitch * (linked ? 0.6 : 1)) - 10);
-      var k = bb.think ? Math.SQRT2 : 1;
-      bb.linked = linked;
-      bb.text2 = wrap(bb.text, chars((linked ? Math.min(cap, bwMax / 2 + 60) : cap) / k - 20));
-      var s = size(bb.text2);
-      bb.w = Math.min(cap, Math.ceil((s.w + 20) * k) + (bb.think ? 8 : 0));
-      bb.h = Math.ceil((s.h + 20) * k);
-      rowExtra[b.r] = Math.max(rowExtra[b.r], bb.h + 26);
+      prepBub(b, linked, cap, bwMax / 2 + 60);
+      rowExtra[b.r] = Math.max(rowExtra[b.r], b.bub.h + 26);
     });
-    var rowTop = [], cur = y;
+    var rowTop = [], cur = Math.max(y, fixedBottom);
     for (var rr = 0; rr < rows; rr++) {
       cur += rowExtra[rr] + (rr > 0 ? gy : 0);
+      boxes.forEach(function (b) { if (b.r === rr && need[b.id] && need[b.id].y) cur = Math.max(cur, need[b.id].y); });
       rowTop[rr] = cur;
       cur += bhMax;
     }
     boxes.forEach(function (b) {
-      var col = b.marker && MARKERS[b.marker];
       b.w = bwMax; b.h = bhMax;
       b.x = Math.round(x0 + b.c * pitch); b.y = Math.round(rowTop[b.r]);
-      mk.push({ id: P(b.id), type: 'rectangle', x: b.x, y: b.y, width: b.w, height: b.h, strokeWidth: sw(b), backgroundColor: col ? col.fill : '#ffffff', label: { text: b.label, fontSize: FS } });
-      var bb = b.bub;
-      if (bb) {
-        var bcol = bb.marker && MARKERS[bb.marker], mid = b.x + b.w / 2;
-        bb.y = b.y - 26 - bb.h;
-        if (bb.linked) {
-          var leftRoom = (mid - 12) - rx, rightRoom = (rx + rw) - (mid + 12);
-          bb.x = leftRoom >= rightRoom ? Math.round(mid - 12 - bb.w) : Math.round(mid + 12);
-        } else bb.x = Math.round(Math.max(rx, Math.min(rx + rw - bb.w, mid - bb.w / 2)));
-        bb.x = Math.max(M, Math.min(W - M - bb.w, bb.x));
-        var tipX = bb.linked ? (bb.x < mid ? b.x + b.w * 0.25 : b.x + b.w * 0.75) : mid;
-        var btx = Math.max(bb.x + 14, Math.min(bb.x + bb.w - 14, tipX)), by2 = bb.y + bb.h, tip = b.y - 4;
-        mk.push({ id: P(b.id + '_' + (bb.think ? 'thinks' : 'says')), type: bb.think ? 'ellipse' : 'rectangle', x: bb.x, y: bb.y, width: bb.w, height: bb.h, strokeWidth: sw(bb),
-          backgroundColor: bcol ? bcol.fill : '#ffffff', label: { text: bb.text2, fontSize: FS } });
-        if (bb.think) {
-          [[0.3, 9], [0.62, 6], [0.9, 4]].forEach(function (d) {
-            mk.push({ id: mk.id('dot'), type: 'line', x: btx + (tipX - btx) * d[0], y: by2 + (tip - by2) * d[0], points: [[0, 0], [1, 0]], strokeWidth: d[1] });
-          });
-        } else {
-          mk.push({ id: mk.id('tail'), type: 'line', x: btx - 9, y: by2, points: [[0, 0], [tipX - btx + 9, tip - by2], [18, 0]], strokeWidth: 2 });
-        }
-      }
+      pushBox(b); drawBub(b);
+      if (b.id) reg[b.id] = { x: b.x, y: b.y, w: b.w, h: b.h };
     });
     y = rowTop[rows - 1] + bhMax + SECTION;
-  } else if (edges.length && !figs.length) {
-    fail(file, edges[0].line, '', 'arrow with no boxes in this ' + (scope ? 'panel' : 'file'), 'declare the boxes first: a: box "A"');
   }
+  fixed.forEach(function (b) {
+    pushBox(b);
+    if (b.bub) {
+      var linked = edges.some(function (e) { var o = e.from === b.id ? ids[e.to] : e.to === b.id ? ids[e.from] : null; return o && o.kind === 'box' && typeof o.y === 'number' && o.y + o.h <= b.y; });
+      prepBub(b, linked, Math.min(rw, 210), b.w / 2 + 60);
+      b.lower(boxTop + b.bub.h + 26, b.bub.line);
+      drawBub(b);
+    }
+  });
+  if (fixed.length) y = Math.max(y, fixedBottom);
+  if (!boxes.length && !fixed.length && edges.length && !figs.length) fail(file, edges[0].line, '', 'arrow with no boxes in this ' + (scope ? 'panel' : 'file'), 'declare the boxes first: a: box "A"');
   if (edges.length) {
     var anchor = function (id) { var s = ids[id]; return s && s.kind === 'figure' ? { x: s.rect.x, y: s.rect.y, w: s.rect.w, h: s.rect.h } : s && s.kind === 'box' ? s : null; };
     edges.forEach(function (e) {
@@ -502,19 +576,19 @@ function layoutBody(stmts, W, scope, grid, file) {
         var acx = a.x + a.w / 2, bcx = b.x + b.w / 2;
         var ax = (acx + bcx) / 2, ay = (a.y + a.h / 2 + b.y + b.h / 2) / 2;
         var vertical = Math.abs(a.x - b.x) < 4 && Math.abs(a.w - b.w) < 4, horizontal = Math.abs(a.y - b.y) < 4;
-        var txt, s;
+        var txt, s, efs = e.small ? SMALL : FS;
         var lx = side ? rx : M, lw = side ? rw : W - 2 * M;
         if (horizontal) {
           var gapW = Math.abs(bcx - acx) - (a.w + b.w) / 2;
-          txt = wrap(e.label, chars(Math.max(gapW - 8, 60))); s = size(txt);
-          mk.push({ id: mk.id('lbl'), type: 'text', x: ax - s.w / 2, y: ay - 8 - s.h, text: txt, fontSize: FS, strokeColor: col ? col.ink : INK, textAlign: 'center' });
+          txt = wrap(e.label, chars(Math.max(gapW - 8, 60), efs)); s = size(txt, efs);
+          mk.push({ id: mk.id('lbl'), type: 'text', x: ax - s.w / 2, y: ay - 8 - s.h, text: txt, fontSize: efs, strokeColor: col ? col.ink : INK, textAlign: 'center' });
         } else {
           var rightRoom = (lx + lw) - (ax + 8), leftRoom = (ax - 8) - lx;
           var onRight = side === 'right' ? false : rightRoom >= leftRoom;
-          txt = wrap(e.label, chars(onRight ? rightRoom : leftRoom)); s = size(txt);
+          txt = wrap(e.label, chars(onRight ? rightRoom : leftRoom, efs)); s = size(txt, efs);
           var below = vertical && ids[e.to] && ids[e.to].bub;     // a bubble sits just above the target; keep the label under the source
           var lyc = below ? a.y + a.h + 6 + s.h / 2 : ay - (vertical ? 0 : 6);
-          mk.push({ id: mk.id('lbl'), type: 'text', x: onRight ? ax + 14 : ax - 14 - s.w, y: lyc - s.h / 2, text: txt, fontSize: FS, strokeColor: col ? col.ink : INK, textAlign: onRight ? 'left' : 'right' });
+          mk.push({ id: mk.id('lbl'), type: 'text', x: onRight ? ax + 14 : ax - 14 - s.w, y: lyc - s.h / 2, text: txt, fontSize: efs, strokeColor: col ? col.ink : INK, textAlign: onRight ? 'left' : 'right' });
         }
       }
     });
@@ -524,9 +598,9 @@ function layoutBody(stmts, W, scope, grid, file) {
   if (bars.length) {
     var maxN = Math.max.apply(null, bars.map(function (b) { return b.n; })) || 1, bwFull = W - 2 * M;
     bars.forEach(function (b) {
-      var col = b.marker && MARKERS[b.marker], txt = wrap(b.text, chars(bwFull)), s = size(txt);
-      mk.push({ id: mk.id('bl'), type: 'text', x: M, y: y, text: txt, fontSize: FS, strokeColor: col ? col.ink : INK, textAlign: 'left' });
-      y += s.h + 4;
+      var col = b.marker && MARKERS[b.marker], blk = block(b.text, b.small, bwFull);
+      emit(mk, blk, M, y, bwFull, { align: 'left', ink: col ? col.ink : INK });
+      y += blk.h + 4;
       mk.push({ id: mk.id('bar'), type: 'rectangle', x: M, y: y, width: Math.max(6, Math.round(b.n / maxN * bwFull)), height: 18, strokeWidth: sw(b), backgroundColor: col ? col.fill : '#ffffff' });
       y += 18 + 12;
     });
@@ -535,30 +609,40 @@ function layoutBody(stmts, W, scope, grid, file) {
 
   // 5. free text and the caption, centred; bold underlines each line
   stats.concat(notes).forEach(function (t) {
-    var col = t.marker && MARKERS[t.marker], txt = wrap(t.text, chars(W - 2 * M)), s = size(txt);
-    mk.push({ id: mk.id('txt'), type: 'text', x: Math.round((W - s.w) / 2), y: y, text: txt, fontSize: FS, strokeColor: col ? col.ink : INK, textAlign: 'center' });
-    if (t.bold) txt.split('\n').forEach(function (l, i) {
-      var lw = Math.ceil(l.length * CW * FS * 0.92);
-      mk.push({ id: mk.id('ul'), type: 'line', x: Math.round((W - lw) / 2), y: y + (i + 1) * LH * FS - 1, points: [[0, 0], [lw, 0]], strokeWidth: 3 });
+    var col = t.marker && MARKERS[t.marker], blk = block(t.text, t.small, W - 2 * M), uy = y;
+    emit(mk, blk, 0, y, W, { ink: col ? col.ink : INK });
+    if (t.bold) blk.lines.forEach(function (l) {
+      var lw = Math.ceil(l.t.length * CW * l.fs * 0.92);
+      uy += LH * l.fs;
+      mk.push({ id: mk.id('ul'), type: 'line', x: Math.round(blk.marked ? (W - blk.w) / 2 + MARK_W : (W - lw) / 2), y: uy - 1, points: [[0, 0], [lw, 0]], strokeWidth: 3 });
     });
-    y += s.h + 10 + (t.bold ? 4 : 0);
+    y += blk.h + 10 + (t.bold ? 4 : 0);
   });
   return { els: mk.els, h: Math.max(0, y - SECTION + 10) };
 }
 
 // Parsed document -> element array.
 export function sketchToElements(doc, file) {
+  var need = {}, out = build(doc, file, need);
+  if (need.dirty) { need.final = true; out = build(doc, file, need); }   // a repeated box sits lower in its first panel when a later panel needs room above it
+  return out;
+}
+function build(doc, file, need) {
   var out = [];
   var cols = Math.min(doc.cols, MAXCOLS, Math.max(1, doc.panels.length));
   var width = doc.panels.length ? cols * PW + (cols - 1) * PGAP : 520;
-  var y = 0;
+  var y = 0, reg = {}, again = {};
+  var scan = function (stmts) { stmts.forEach(function (st) { if (st.kind === 'box' && st.same) again[st.id] = 1; }); };
+  scan(doc.body); doc.panels.forEach(function (p) { scan(p.stmts); });
+  var want = function (stmts) { stmts.forEach(function (st) { if (st.kind === 'box' && again[st.id]) { var bl = block(st.label, st.small, Infinity), n0 = need[st.id] || { w: 0, h: 0 }; need[st.id] = { w: Math.max(n0.w, bl.w + 24), h: Math.max(n0.h, bl.h + 24), y: n0.y || 0 }; } }); };
+  want(doc.body); doc.panels.forEach(function (p) { want(p.stmts); });
   if (doc.title) {
     var t = wrap(doc.title, chars(width)), s = size(t);
     out.push({ id: 'title', type: 'text', x: Math.round((width - s.w) / 2), y: 0, text: t, fontSize: FS, textAlign: 'center' });
     y = s.h + 18;
   }
   if (doc.body.length) {
-    var body = layoutBody(doc.body, width, '', doc.grid, file);
+    var body = layoutBody(doc.body, width, '', doc.grid, file, reg, need);
     shift(body.els, 0, y); out = out.concat(body.els); y += body.h + 24;
   }
   var rows = [];
@@ -569,7 +653,7 @@ export function sketchToElements(doc, file) {
       var head = wrap(p.title, chars(PW - 2 * M)), hs = size(head);
       var stmts = p.stmts.slice();
       if (p.note) stmts.push({ kind: 'note', text: p.note, marker: null, line: p.line });
-      var body = layoutBody(stmts, PW, 'p' + (i + 1) + '_', p.grid, file);
+      var body = layoutBody(stmts, PW, 'p' + (i + 1) + '_', p.grid, file, reg, need);
       return { head: head, hs: hs, body: body, top: hs.h + 22, num: i };
     });
     var H = Math.max.apply(null, laid.map(function (l) { return l.top + l.body.h + 16; }));
