@@ -1,0 +1,9 @@
+strip 2 cols
+panel "Every PR, for weeks" note "Every PR, for weeks."
+  dev: figure happy shrug @right "Dev"
+  dev says "One red. Easy."
+  checks: box "✗ Audit DAG shape\n~ – Lint SQL (skipped)"
+panel "After PR #8" note "It was the only one allowed to run."
+  dev: figure sad @right "Dev"
+  dev says "I fixed the only error."
+  checks: same "✓ Audit DAG shape\n✗ Lint SQL: 55 files"

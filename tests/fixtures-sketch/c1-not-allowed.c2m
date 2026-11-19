@@ -1,0 +1,12 @@
+strip 3 cols
+panel "1"
+  build: box "PR #42\ndbt build\nrunning" @top-right
+  tom: figure point laptop @left "Tom"
+  tom says "/dbt biuld"
+panel "2"
+  bot: box "✓ Not allowed: biuld" @top
+  tom: figure happy @left "Tom"
+  tom says "Phew. Ignored."
+panel "3" note "The cancel happens before anyone reads the word."
+  build: same "PR #42\ndbt build\nCancelled"
+  tom: figure point laptop @left "Tom"
