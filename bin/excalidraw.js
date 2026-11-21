@@ -4,7 +4,7 @@
 // The help text below is the agent's whole manual for this command; keep it in
 // step with src/diagrams/skeleton.js.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename, dirname, resolve } from 'path';
 import { buildSkeleton } from '../src/diagrams/skeleton.js';
 import { sketchToSkeleton, SKETCH_EXT } from '../src/sketch.js';
@@ -29,6 +29,29 @@ Usage:
   c2m lint <file>...              check only, any input: exit 1 on an error finding
                                   (same as c2m excalidraw --lint-only <file>...)
   c2m excalidraw --help           show this help
+
+CARD (the rules writers get wrong; details in the sections below)
+  Render:  c2m excalidraw --png <dir> --strict <file>...
+           writes <dir>/<file name without .json/.mmd/.c2m>.png and exits 1 on
+           any lint error. Check only: c2m lint <file>...
+  .mmd flowchart   flowchart TD (LR is redrawn as TD). Labels <= ~24 chars,
+                   <br> for a second line. <= ~12 nodes; split bigger ones.
+  .mmd sequence    sequenceDiagram, <= 5 participants with short aliases
+                   (participant A as API). Messages <= ~30 chars; put detail in
+                   a Note. Lint f fails a diagram that prints under 8 pt.
+  .c2m sketch      strip 1|2|3 cols (never 4+) · panel "T" · indent = inside
+                   the panel · id: box "L" · id: figure [mood] [pose]
+                   id says "t" (figure or box, but not an @top box)
+                   b: same "L" (repeat a box at its place; first use declares)
+                   a -> b "l" across panels: ids must be unique, or declared
+                   in exactly one panel
+  Lint classes     a out of frame · b overlap · c literal <br> · d loose
+                   arrow · e label too big · f text under 8 pt · g too many
+                   fills (warn). Fix the input, never the lint.
+  Doodle           a JSON object; each note names its target by visible text:
+                   {"image": "shot.png", "notes": [{"text": "the field users forget", "at": "Password"}]}
+                   "at" reads shot.png.boxes.json beside the PNG (a browser
+                   screenshot writes it); see DOODLE below.
 
 OUTPUT (stdout, in this order)
   line 1      https://excalidraw.com/#json=<id>,<key>   (omitted with --no-upload)
@@ -209,13 +232,20 @@ DOODLE (annotated screenshot: a JSON object with "image" and "notes")
                                    in the image's own pixels
    "color": "#1971c2",             optional: pen colour for notes and arrows
    "notes": [
+     {"text": "the field users forget", "at": "Password"},
      {"text": "honest about gaps", "target": [100, 150, 370, 45]},
      {"text": "green = in the warehouse", "target": [1662, 341], "side": "right"}]}
+  at       visible text on the screenshot; the note points at its box. Read
+           from <image>.boxes.json beside the image (or "boxes": "<file>"):
+           {"width", "height", "boxes": [{"text", "x", "y", "w", "h"}]} in
+           image pixels; scaled when its width differs from the image's.
+           Exact text first, then a case- and space-insensitive substring
+           (tightest box wins); no match fails with the 3 closest texts.
   target   [x, y] a point, or [x, y, width, height] a box (gets an outline),
            in the image's pixels, measured from its top-left corner
   side     left, right, top or bottom; default: the image edge nearest the
            target. Notes stack in the margin on that side, never on the
-           image or on each other, wrapped at ~28 characters ("\n" breaks).
+           image or on each other, wrapped at ~28 characters ("\\n" breaks).
   Each note gets a curved arrow from its edge to the target, in Excalidraw's
   hand font. The preview lists the notes. The share link opens WITHOUT the
   picture (excalidraw.com stores pictures apart from the link), so every
@@ -225,7 +255,7 @@ SKETCH (a comic or quick doodle in a compact text format: file.c2m or file.sketc
   One statement per line; indent = inside the preceding panel. # starts a comment.
   Use it for strips and small explainers: it lays everything out for you (no
   coordinates), so a 3-panel comic is about 20 lines instead of 150 of JSON.
-  strip [N cols]                        optional first line: panels per row (default 2, at most 3 per row)
+  strip 1|2|3 cols                      optional first line: panels per row (default 2; 4 or more is an error)
   title "text"                          optional heading above the strip
   panel "Title" [note "caption"]        starts a panel; the statements below belong to it
   grid R x C                            optional: lay the panel's boxes in R rows x C columns
@@ -239,11 +269,12 @@ SKETCH (a comic or quick doodle in a compact text format: file.c2m or file.sketc
   id: figure point|cheer|sit|shrug|run   pose; combine with a mood: me: figure sad shrug
   id: figure sit laptop                  prop: laptop, clock, server, coffee or doc
   me -> db "asks"                        arrows may start or end on figures too
-  db says "ready"                        a box can speak: bubble above the box
+  db says "ready"                        a box can speak: bubble above the box (not a box placed @top)
+  a -> b "label"                        at top level or across panels: joins boxes in two panels
   b: box "Big" bold                      bold: thick strokes (box) or underline (stat)
   bar "Q1" 4                           bar scaled to the largest bar in the panel
   grid 2 cols  |  grid 2 x 2             lay the boxes out in columns / rows x columns
-  b: same "Cancelled"                   repeat a box of an earlier panel, same place and size
+  b: same "Cancelled"                   repeat a box of an earlier panel, same place and size (first use declares it)
   note "tiny" small                     small text; in a box label a line starting "~ " is small
   b: box "✓ Passed\\n✗ Failed"          ✓/✗ at the start of a line become drawn marks
   b: box "Build" @top-right             @top-left, @top, @top-right: box on its own row above the figures
@@ -319,8 +350,14 @@ async function buildInputRaw(target, io) {
     var base = target === '-' ? process.cwd() : dirname(resolve(target));
     var bytes;
     try { bytes = readFileSync(resolve(base, input.image)); } catch (e) { throw new Error('cannot read image ' + input.image + ': ' + e.message); }
+    // The sidecar a browser screenshot writes beside the PNG, for notes that
+    // name their target by text ("at"). Optional; only "at" needs it.
+    var boxes = null, side = resolve(base, input.boxes || input.image + '.boxes.json');
+    if (existsSync(side)) {
+      try { boxes = JSON.parse(readFileSync(side, 'utf8')); } catch (e) { throw new Error('cannot read boxes file ' + side + ': ' + e.message); }
+    }
     var render = await import('../src/excalidraw-png.js');
-    return Object.assign({ fence: 'text' }, await doodle.doodleToScene(input, bytes, render.loadExcalidraw));
+    return Object.assign({ fence: 'text' }, await doodle.doodleToScene(input, bytes, render.loadExcalidraw, boxes));
   }
   return Object.assign({ fence: 'mermaid' }, toScene(input));
 }

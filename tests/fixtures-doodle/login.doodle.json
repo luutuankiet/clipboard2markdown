@@ -1,0 +1,13 @@
+{
+ "image": "login.png",
+ "notes": [
+  {
+   "text": "the field the user forgets",
+   "at": "Password"
+  },
+  {
+   "text": "reset link lives here",
+   "at": "forgot password"
+  }
+ ]
+}

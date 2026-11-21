@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
-import { doodleSkeleton, imageInfo, isDoodleSpec, layoutDoodle, wrapText } from '../../src/doodle.js';
+import { doodleSkeleton, imageInfo, isDoodleSpec, layoutDoodle, resolveAt, wrapText } from '../../src/doodle.js';
 import { fixImageSymbols } from '../../src/excalidraw-png.js';
 
 // A 1x1 PNG header is enough: layout reads only the IHDR size.
@@ -72,5 +72,44 @@ describe('doodle layout', () => {
     var svg = '<symbol id="image-a"><image href="data:x" preserveAspectRatio="none" width="100%" height="100%"></image></symbol>';
     expect(fixImageSymbols(svg)).toContain('<symbol id="image-a" viewBox="0 0 100 100" preserveAspectRatio="none">');
     expect(fixImageSymbols(svg)).toContain('width="100" height="100"');
+  });
+});
+
+// Notes that name their target by visible text, resolved against the sidecar
+// <image>.boxes.json a browser screenshot writes beside the PNG.
+describe('doodle "at" text anchors', () => {
+  const dir = new URL('../fixtures-doodle/', import.meta.url);
+  const boxes = JSON.parse(readFileSync(new URL('login.png.boxes.json', dir), 'utf8'));
+  const login = imageInfo(readFileSync(new URL('login.png', dir)));
+
+  it('prefers an exact match over a substring of a longer text', () => {
+    expect(resolveAt('Password', 0, boxes, login)).toEqual([250, 200, 300, 36]);
+  });
+
+  it('falls back to a case- and whitespace-insensitive substring', () => {
+    expect(resolveAt('  forgot   PASSWORD ', 0, boxes, login)).toEqual([250, 250, 140, 24]);
+  });
+
+  it('picks the tightest box when several texts contain the anchor', () => {
+    expect(resolveAt('pass', 0, boxes, login)).toEqual([250, 200, 300, 36]);
+  });
+
+  it('fails with the three closest texts when nothing matches', () => {
+    expect(() => resolveAt('Log in', 1, boxes, login)).toThrow(/note 2: "at" "Log in" matches no text.*closest: "Sign in", /);
+  });
+
+  it('fails with the fix when there is no sidecar', () => {
+    expect(() => resolveAt('Sign in', 0, null, login)).toThrow(/boxes\.json.*"target": \[x, y, w, h\]/);
+  });
+
+  it('scales boxes when the sidecar was measured at another width', () => {
+    const half = { width: 400, height: 200, boxes: [{ text: 'Sign in', x: 165, y: 30, w: 70, h: 20 }] };
+    expect(resolveAt('Sign in', 0, half, login)).toEqual([330, 60, 140, 40]);
+  });
+
+  it('lays out notes given "at" exactly as the same note given "target"', () => {
+    const byText = layoutDoodle({ image: 'login.png', notes: [{ text: 'n', at: 'Sign in' }] }, login, boxes);
+    const byBox = layoutDoodle({ image: 'login.png', notes: [{ text: 'n', target: [330, 60, 140, 40] }] }, login);
+    expect(byText.notes[0]).toEqual(byBox.notes[0]);
   });
 });

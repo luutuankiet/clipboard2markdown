@@ -51,6 +51,15 @@ describe('c2m excalidraw --png', { timeout: 60000 }, () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'c2m-png-'));
   });
 
+  it('renders a doodle whose notes name targets by text, reading the sidecar beside the image', async () => {
+    const out = path.join(tmp, 'doodle');
+    const r = await run(['--png', out, '--strict', path.join(root, 'tests/fixtures-doodle/login.doodle.json')], { fetch: createFakeBackend().fetch });
+    expect(r.stderr).not.toMatch(/error|cannot/i);
+    expect(r.stdout).not.toMatch(/lint d/);
+    expect(r.code).toBe(0);
+    expect(fs.existsSync(path.join(out, 'login.doodle.png'))).toBe(true);
+  });
+
   it('writes a scale-3 PNG and a review PNG per scene, and prints the ready block', async () => {
     const backend = createFakeBackend();
     const a = write('flow.json', twoBoxes);

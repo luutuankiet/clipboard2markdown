@@ -56,9 +56,49 @@ function textSize(text, fontSize) {
   return { w: Math.ceil(longest * fontSize * 0.55), h: Math.ceil(lines.length * fontSize * 1.25) };
 }
 
+// A note may name its target by visible text ("at") instead of pixels. The
+// boxes come from the sidecar <image>.boxes.json a browser screenshot writes
+// beside the PNG: {width, height, boxes: [{text, x, y, w, h}]} in image pixels.
+// Exact text wins, then a case- and whitespace-insensitive substring; anything
+// else fails with the three closest texts so the writer can copy one.
+function norm(s) { return String(s).toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+function distance(a, b) {
+  var prev = [], cur, i, j;
+  for (j = 0; j <= b.length; j++) prev[j] = j;
+  for (i = 1; i <= a.length; i++) {
+    cur = [i];
+    for (j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+export function resolveAt(at, k, boxes, info) {
+  var where = 'note ' + (k + 1) + ': "at" ' + JSON.stringify(at);
+  if (!boxes) throw new Error(where + ' needs the sidecar <image>.boxes.json beside the picture; without it give "target": [x, y, w, h]');
+  var list = (boxes.boxes || []).filter(function (b) { return b && typeof b.text === 'string' && b.text.trim(); });
+  var hit = list.filter(function (b) { return b.text === at; });
+  if (!hit.length) {
+    var q = norm(at);
+    hit = list.filter(function (b) { return norm(b.text).indexOf(q) >= 0; });
+  }
+  if (!hit.length) {
+    var near = list.map(function (b) { return { t: b.text, d: distance(norm(b.text).slice(0, 80), norm(at)) }; })
+      .sort(function (a, b) { return a.d - b.d; }).slice(0, 3)
+      .map(function (c) { return JSON.stringify(c.t.length > 60 ? c.t.slice(0, 60) + '...' : c.t); });
+    throw new Error(where + ' matches no text in the boxes file' + (near.length ? '; closest: ' + near.join(', ') : ''));
+  }
+  // Several matches: prefer the shortest text (the tightest box), then the first.
+  hit.sort(function (a, b) { return a.text.length - b.text.length; });
+  var b = hit[0], s = boxes.width && boxes.width !== info.width ? info.width / boxes.width : 1;
+  var x = Math.max(0, b.x * s), y = Math.max(0, b.y * s);
+  return [x, y, Math.min(info.width - x, b.w * s), Math.min(info.height - y, b.h * s)];
+}
+
 function parseTarget(t, k, info) {
   if (!Array.isArray(t) || (t.length !== 2 && t.length !== 4) || t.some(function (v) { return typeof v !== 'number' || !isFinite(v); })) {
-    throw new Error('note ' + (k + 1) + ': "target" must be [x, y] (a point) or [x, y, width, height] (a box), in image pixels');
+    throw new Error('note ' + (k + 1) + ': give "at": "<visible text>" or "target": [x, y] (a point) or [x, y, width, height] (a box), in image pixels');
   }
   var box = { x: t[0], y: t[1], w: t[2] || 0, h: t[3] || 0, isBox: t.length === 4 };
   if (box.x < 0 || box.y < 0 || box.x + box.w > info.width || box.y + box.h > info.height) {
@@ -90,17 +130,17 @@ function stack(notes, axis) {
 
 // Returns { notes: [{text, x, y, w, h, side, target, start, end}], W, H }:
 // the layout in scene pixels with the picture at (0, 0) to (W, H).
-export function layoutDoodle(spec, info) {
+export function layoutDoodle(spec, info, boxes) {
   var opt = Object.assign({}, DOODLE_DEFAULTS, spec);
   var natural = info.width;
   var W = spec.width ? Number(spec.width) : Math.min(natural, opt.maxWidth);
   if (!(W > 0)) throw new Error('"width" must be a positive number of pixels');
   var s = W / natural, H = Math.round(info.height * s);
-  if (!spec.notes.length) throw new Error('"notes" is empty: give at least one {"text", "target"}');
+  if (!spec.notes.length) throw new Error('"notes" is empty: give at least one {"text", "at"} or {"text", "target"}');
 
   var notes = spec.notes.map(function (n, k) {
     if (!n || typeof n.text !== 'string' || !n.text.trim()) throw new Error('note ' + (k + 1) + ': needs "text"');
-    var t = parseTarget(n.target, k, info);
+    var t = parseTarget(n.at != null && n.target == null ? resolveAt(String(n.at), k, boxes, info) : n.target, k, info);
     var target = { x: t.x * s, y: t.y * s, w: t.w * s, h: t.h * s, isBox: t.isBox };
     var c = { x: target.x + target.w / 2, y: target.y + target.h / 2 };
     var side = n.side || nearestSide(c, W, H);
@@ -164,9 +204,9 @@ function arrowEnd(t, from) {
 }
 
 // Excalidraw element skeletons (for convertToExcalidrawElements) plus files.
-export function doodleSkeleton(spec, bytes, now) {
+export function doodleSkeleton(spec, bytes, now, boxes) {
   var info = imageInfo(bytes);
-  var lay = layoutDoodle(spec, info);
+  var lay = layoutDoodle(spec, info, boxes);
   var fileId = 'doodle-image';
   var els = [
     { type: 'image', id: 'image', fileId: fileId, x: 0, y: 0, width: lay.W, height: lay.H, status: 'saved' },
@@ -203,8 +243,8 @@ export function doodlePreview(spec, lay) {
   })).join('\n');
 }
 
-export async function doodleToScene(spec, bytes, loadExcalidraw) {
-  var built = doodleSkeleton(spec, bytes, Date.now());
+export async function doodleToScene(spec, bytes, loadExcalidraw, boxes) {
+  var built = doodleSkeleton(spec, bytes, Date.now(), boxes);
   var m = await loadExcalidraw();
   var elements = m.convertToExcalidrawElements(built.elements, { regenerateIds: false });
   // The converter shifts a right- or centre-aligned text left by its width,
@@ -216,6 +256,22 @@ export async function doodleToScene(spec, bytes, loadExcalidraw) {
     if (!n) return;
     e.x = n.textAlign === 'right' ? n.x + n.w - e.width : n.textAlign === 'center' ? n.x + (n.w - e.width) / 2 : n.x;
     e.y = n.y;
+  });
+  // Bind each arrow to its note and to what it points at (the outline box, or
+  // the picture for a point), so the arrows follow when someone moves a note
+  // in Excalidraw, and lint does not read them as loose arrows.
+  var byId = {};
+  elements.forEach(function (e) { byId[e.id] = e; });
+  function bind(arrow, which, target) {
+    if (!target) return;
+    arrow[which + 'Binding'] = { elementId: target.id, focus: 0, gap: 4 };
+    target.boundElements = (target.boundElements || []).concat([{ id: arrow.id, type: 'arrow' }]);
+  }
+  built.layout.notes.forEach(function (n, k) {
+    var id = 'note-' + (k + 1), arrow = byId[id + '-arrow'];
+    if (!arrow) return;
+    bind(arrow, 'start', byId[id]);
+    bind(arrow, 'end', byId[id + '-box'] || byId.image);
   });
   return {
     scene: { type: 'excalidraw', version: 2, source: 'c2m', elements: elements, appState: { viewBackgroundColor: '#ffffff' }, files: built.files },
