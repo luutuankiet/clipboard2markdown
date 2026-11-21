@@ -23,7 +23,14 @@ const MIN_AREA = 4;       // px^2 overlap below which a touch is ignored
 export const PAGE_PT = 468;
 export const ALL_CLASSES = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 
-function bbox(e) { return [e.x, e.y, e.x + e.width, e.y + e.height]; }
+function bbox(e) {
+  // a line or arrow can run left or up from its start point: measure its points, not x + width
+  if (e.points && e.points.length) {
+    var xs = e.points.map(function (p) { return e.x + p[0]; }), ys = e.points.map(function (p) { return e.y + p[1]; });
+    return [Math.min.apply(null, xs), Math.min.apply(null, ys), Math.max.apply(null, xs), Math.max.apply(null, ys)];
+  }
+  return [e.x, e.y, e.x + e.width, e.y + e.height];
+}
 
 function poly(e) {
   var b = bbox(e), cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;

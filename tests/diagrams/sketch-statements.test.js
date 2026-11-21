@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { sketchToSkeleton } from '../../src/sketch.js';
+import { sketchToSkeleton, parseSketch } from '../../src/sketch.js';
 import { buildSkeleton } from '../../src/diagrams/skeleton.js';
 import { lintScene } from '../../src/lint.js';
 
@@ -74,8 +74,9 @@ describe('c2m statements', () => {
     const three = clean('strip 3 cols\n' + [1, 2, 3].map((i) => 'panel "' + i + '"\n  m: figure\n  m says "hi"').join('\n'));
     const ys = byId(three, /frame$/).map((f) => f.y);
     expect(new Set(ys).size).toBe(1);
-    const four = clean('strip 4 cols\n' + [1, 2, 3, 4].map((i) => 'panel "' + i + '"\n  m: figure').join('\n'));
+    const four = clean('strip 3 cols\n' + [1, 2, 3, 4].map((i) => 'panel "' + i + '"\n  m: figure').join('\n'));
     expect(new Set(byId(four, /frame$/).map((f) => f.y)).size).toBe(2);
+    expect(() => parseSketch('strip 4 cols\npanel "A"\n  m: figure', 't.c2m')).toThrow(/strip needs a column count from 1 to 3/);
   });
   it('same repeats a box at the same place and size with a new label', () => {
     const els = clean('strip 2 cols\npanel "A"\n  b: box "run\\nning"\n  m: figure\n  m says "go"\npanel "B"\n  b: same "Cancelled"');
@@ -83,7 +84,9 @@ describe('c2m statements', () => {
     const f1 = byId(els, /^p1_frame$/)[0], f2 = byId(els, /^p2_frame$/)[0];
     expect([b.x - f2.x, b.y - f2.y, b.width, b.height]).toEqual([a.x - f1.x, a.y - f1.y, a.width, a.height]);
     expect(els.find((e) => e.type === 'text' && e.containerId === b.id).text).toBe('Cancelled');
-    fails('panel "A"\n  b: same "X"', /no earlier panel/);
+    // same before any box of that id is just its first declaration
+    const first = clean('panel "A"\n  a: box "A"\n  b: same "X" bold\n  a -> b "go"');
+    expect(byId(first, /^p1_b$/)[0].type).toBe('rectangle');
   });
   it('small draws 12 px text, never below 8 pt at page width', () => {
     const els = clean('panel "A"\n  note "tiny" small\n  stat "normal"');
@@ -116,5 +119,28 @@ describe('c2m statements', () => {
   });
   it('the two example comics render clean under lint', () => {
     ['c1-not-allowed.c2m', 'c2-only-error.c2m'].forEach((f) => clean(readFileSync(path.join(dir, f), 'utf8')));
+  });
+  it('a panel grows to fit its widest box, so its frame never cuts a box', () => {
+    // long labels wrap to the panel first; the frame never cuts a box
+    const els = clean('strip 3 cols\n' + [1, 2, 3].map((i) => 'panel "' + i + '"\n  a: box "Stays on: evicted after 70 to 140 s idle" bold\n  b: box "Cold start: none"').join('\n'));
+    const f = byId(els, /^p1_frame$/)[0], a = byId(els, /^p1_a$/)[0];
+    expect(a.x).toBeGreaterThan(f.x);
+    expect(a.x + a.width).toBeLessThan(f.x + f.width);
+    // a label that cannot wrap makes the panel wider instead
+    const wide = clean('strip 2 cols\npanel "1"\n  a: box "idFromName(hub).get(x)"\npanel "2"\n  b: box "y"');
+    const f1 = byId(wide, /^p1_frame$/)[0], f2 = byId(wide, /^p2_frame$/)[0], w = byId(wide, /^p1_a$/)[0];
+    expect(f1.width).toBeGreaterThan(256);
+    expect(w.x).toBeGreaterThan(f1.x);
+    expect(w.x + w.width).toBeLessThan(f2.x);
+  });
+  it('arrows join boxes in different panels, written in a panel or at the top level', () => {
+    const els = clean('strip 2 cols\npanel "In"\n  e: box "emu"\n  r: box "router"\npanel "Out"\n  g: box "gateway"\n  r -> g "dials out"\ne -> g');
+    const arrows = els.filter((x) => x.type === 'arrow').map((x) => x.id);
+    expect(arrows).toEqual(expect.arrayContaining(['p1_r_to_p2_g', 'p1_e_to_p2_g']));
+    fails('strip 2 cols\npanel "A"\n  h: box "hub"\npanel "B"\n  h: box "hub"\n  x: box "x"\npanel "C"\n  y: box "y"\n  y -> h', /declared in panels 1, 2/);
+    fails('panel "A"\n  a: box "A"\n  a -> zz', /"zz" is not a box or figure in any panel/);
+  });
+  it('a bubble on an @top box says how to rewrite it', () => {
+    fails('panel "A"\n  hub: box "hub" @top-left\n  hub says "hi"', /drop the slot.*hub: box "hub"/);
   });
 });

@@ -103,7 +103,7 @@ export function parseSketch(source, file) {
 
     if (first === 'strip') {
       var n = Number(word(1));
-      if (!(n >= 1 && n <= 4)) err('strip needs a column count from 1 to 4', 'write: strip 2 cols   (2 columns fit a 468 pt page at 14 pt text)');
+      if (!(n >= 1 && n <= MAXCOLS)) err('strip needs a column count from 1 to 3', n > MAXCOLS ? 'write: strip 3 cols   (at most 3 panels fit a row at 10 pt; the 4th panel starts a second row)' : 'write: strip 2 cols   (2 columns fit a 468 pt page at 14 pt text)');
       doc.cols = n; return;
     }
     if (first === 'title') { doc.title = plain(str(1, 'title'), 'the title'); return; }
@@ -329,7 +329,7 @@ function drawProp(mk, name, x, y) {
 // reg remembers where each box landed (x, y, w, h inside its panel) so a later
 // `id: same "Label"` can repeat it; need holds the widest label of every id that
 // is repeated, so the original is drawn big enough for all of its labels.
-function layoutBody(stmts, W, scope, grid, file, reg, need) {
+function layoutBody(stmts, W, scope, grid, file, reg, need, cross) {
   var mk = Maker(scope + 'e');
   var P = function (id) { return scope + id; };
   var figs = stmts.filter(function (s) { return s.kind === 'figure'; });
@@ -349,6 +349,7 @@ function layoutBody(stmts, W, scope, grid, file, reg, need) {
     }
   });
   var sw = function (s, base) { return s.bold ? 5 : (base || 2); };
+  var cap = Math.min(BOXCAP, W - 2 * M - 24);   // box text wraps to the panel before the panel has to grow
 
   // figure slots
   var used = {};
@@ -378,10 +379,10 @@ function layoutBody(stmts, W, scope, grid, file, reg, need) {
   var y = 0;
   // 0. boxes with @top-left, @top-right or @top (centre): a row of their own above everything
   tops.forEach(function (b) {
-    b.blk = block(b.label, b.small, BOXCAP);
+    b.blk = block(b.label, b.small, cap);
     var nd = need[b.id] || { w: 0, h: 0 };
     b.w = Math.max(80, b.blk.w + 24, nd.w); b.h = Math.max(52, b.blk.h + 24, nd.h);
-    if (stmts.some(function (s) { return s.kind === 'bubble' && s.who === b.id; })) fail(file, b.line, '', 'a box with @top-' + (b.top === 'center' ? 'center' : b.top) + ' cannot have a bubble', 'let a figure speak instead, or drop the slot');
+    if (stmts.some(function (s) { return s.kind === 'bubble' && s.who === b.id; })) fail(file, b.line, '', 'a box with @top' + (b.top === 'center' ? '' : '-' + b.top) + ' cannot have a bubble', 'drop the slot so the box sits in the box rows, where it can speak:  ' + b.id + ': box "' + b.label.replace(/\n/g, '\\n') + '"   (or let a figure say it)');
   });
   var pinnedTop = fixed.filter(function (b) { return reg[b.id] && reg[b.id].top; });
   if (tops.length || pinnedTop.length) {
@@ -508,7 +509,7 @@ function layoutBody(stmts, W, scope, grid, file, reg, need) {
   fixed.forEach(function (b) {
     var r = reg[b.id];
     if (!r) fail(file, b.line, '', '"' + b.id + '" is repeated with same, but no earlier panel declares it', 'declare it first in an earlier panel:  ' + b.id + ': box "Label"   (then ' + b.id + ': same "New label" in a later panel)');
-    b.blk = block(b.label, b.small, BOXCAP);
+    b.blk = block(b.label, b.small, cap);
     b.x = r.x; b.y = r.y; b.w = r.w; b.h = r.h;
     var lower = function (req, line) {      // this panel needs the box lower than the first panel put it: the build is redone once with the box lowered there
       if (b.y >= req) return;
@@ -520,7 +521,7 @@ function layoutBody(stmts, W, scope, grid, file, reg, need) {
   });
   if (boxes.length) {
     boxes.forEach(function (b) {
-      b.blk = block(b.label, b.small, BOXCAP);
+      b.blk = block(b.label, b.small, cap);
       var nd = need[b.id] || { w: 0, h: 0 };
       b.w = Math.max(80, b.blk.w + 24, nd.w); b.h = Math.max(52, b.blk.h + 24, nd.h);
     });
@@ -585,14 +586,14 @@ function layoutBody(stmts, W, scope, grid, file, reg, need) {
     }
   });
   if (fixed.length) y = Math.max(y, fixedBottom);
-  if (!boxes.length && !fixed.length && edges.length && !figs.length) fail(file, edges[0].line, '', 'arrow with no boxes in this ' + (scope ? 'panel' : 'file'), 'declare the boxes first: a: box "A"');
   if (edges.length) {
     var anchor = function (id) { var s = ids[id]; return s && s.kind === 'figure' ? { x: s.rect.x, y: s.rect.y, w: s.rect.w, h: s.rect.h } : s && s.kind === 'box' ? s : null; };
+    edges = edges.filter(function (e) {     // an end that is not here is looked up in the other panels once all are placed
+      if (anchor(e.from) && anchor(e.to)) return true;
+      cross.push({ e: e, scope: scope }); return false;
+    });
     edges.forEach(function (e) {
       var a = anchor(e.from), b = anchor(e.to);
-      [[e.from, a], [e.to, b]].forEach(function (p) {
-        if (!p[1]) fail(file, e.line, '', '"' + p[0] + '" is not a box or figure here', 'arrows join boxes and figures; declared here: ' + (Object.keys(ids).filter(function (k) { return ids[k].kind === 'box' || ids[k].kind === 'figure'; }).join(', ') || 'none'));
-      });
       var col = e.marker && MARKERS[e.marker];
       mk.push({ id: P(e.from + '_to_' + e.to), type: 'arrow', start: { id: P(e.from) }, end: { id: P(e.to) }, strokeColor: col ? col.ink : INK, strokeWidth: e.bold ? 4 : 2 });
       if (e.label) {
@@ -655,10 +656,14 @@ function build(doc, file, need) {
   var cols = Math.min(doc.cols, MAXCOLS, Math.max(1, doc.panels.length));
   var PW = cols >= 3 ? 226 : 256, PGAP = 32;    // 3 panels in a row are narrower so the text still prints at 10 pt
   var width = doc.panels.length ? cols * PW + (cols - 1) * PGAP : 520;
-  var y = 0, reg = {}, again = {};
+  var y = 0, reg = {}, again = {}, cross = [], seen = {};
+  // `id: same` with no earlier box of that id is simply its first declaration
+  [doc.body].concat(doc.panels.map(function (p) { return p.stmts; })).forEach(function (stmts) {
+    stmts.forEach(function (st) { if (st.kind === 'box') { if (st.same && !seen[st.id]) st.same = false; seen[st.id] = 1; } });
+  });
   var scan = function (stmts) { stmts.forEach(function (st) { if (st.kind === 'box' && st.same) again[st.id] = 1; }); };
   scan(doc.body); doc.panels.forEach(function (p) { scan(p.stmts); });
-  var want = function (stmts) { stmts.forEach(function (st) { if (st.kind === 'box' && again[st.id]) { var bl = block(st.label, st.small, BOXCAP), n0 = need[st.id] || { w: 0, h: 0 }; need[st.id] = { w: Math.max(n0.w, bl.w + 24), h: Math.max(n0.h, bl.h + 24), y: n0.y || 0 }; } }); };
+  var want = function (stmts) { stmts.forEach(function (st) { if (st.kind === 'box' && again[st.id]) { var bl = block(st.label, st.small, Math.min(BOXCAP, PW - 2 * M - 24)), n0 = need[st.id] || { w: 0, h: 0 }; need[st.id] = { w: Math.max(n0.w, bl.w + 24), h: Math.max(n0.h, bl.h + 24), y: n0.y || 0 }; } }); };
   want(doc.body); doc.panels.forEach(function (p) { want(p.stmts); });
   if (doc.title) {
     var t = wrap(doc.title, chars(width)), s = size(t);
@@ -666,32 +671,80 @@ function build(doc, file, need) {
     y = s.h + 18;
   }
   if (doc.body.length) {
-    var body = layoutBody(doc.body, width, '', doc.grid, file, reg, need);
+    var body = layoutBody(doc.body, width, '', doc.grid, file, reg, need, cross);
     shift(body.els, 0, y); out = out.concat(body.els); y += body.h + 24;
   }
   var rows = [];
   doc.panels.forEach(function (p, i) { (rows[Math.floor(i / cols)] = rows[Math.floor(i / cols)] || []).push(i); });
   rows.forEach(function (row) {
-    var laid = row.map(function (i) {
-      var p = doc.panels[i];
-      var head = wrap(p.title, chars(PW - 2 * M)), hs = size(head);
-      var stmts = p.stmts.slice();
-      if (p.note) stmts.push({ kind: 'note', text: p.note, marker: null, line: p.line });
-      var body = layoutBody(stmts, PW, 'p' + (i + 1) + '_', p.grid, file, reg, need);
-      return { head: head, hs: hs, body: body, top: hs.h + 22, num: i };
-    });
+    var c0 = cross.length;
+    var lay = function (RW) {
+      cross.length = c0;
+      return row.map(function (i) {
+        var p = doc.panels[i];
+        var head = wrap(p.title, chars(RW - 2 * M)), hs = size(head);
+        var stmts = p.stmts.slice();
+        if (p.note) stmts.push({ kind: 'note', text: p.note, marker: null, line: p.line });
+        var body = layoutBody(stmts, RW, 'p' + (i + 1) + '_', p.grid, file, reg, need, cross);
+        return { head: head, hs: hs, body: body, top: hs.h + 22, num: i };
+      });
+    };
+    // a panel grows to fit its widest box: lay out once, measure, lay out again at the width that fits
+    var RW = PW, laid = lay(PW);
+    var grow = Math.max.apply(null, laid.map(function (l) { return overflow(l.body.els, PW); }));
+    if (grow > 0) { RW = PW + Math.ceil(grow / 2) * 2; laid = lay(RW); }
     var H = Math.max.apply(null, laid.map(function (l) { return l.top + l.body.h + 16; }));
     laid.forEach(function (l, c) {
-      var ox = c * (PW + PGAP) + (doc.cols > MAXCOLS && laid.length < cols ? Math.round((cols - laid.length) * (PW + PGAP) / 2) : 0), p = 'p' + (l.num + 1) + '_';
-      out.push({ id: p + 'frame', type: 'rectangle', x: ox, y: y, width: PW, height: H, strokeWidth: 3 });
-      out.push({ id: p + 'title', type: 'text', x: ox + Math.round((PW - l.hs.w) / 2), y: y + 9, text: l.head, fontSize: FS, textAlign: 'center' });
-      out.push({ id: p + 'rule', type: 'line', x: ox, y: y + l.top - 4, points: [[0, 0], [PW, 0]], strokeWidth: 2 });
+      var ox = c * (RW + PGAP) + (doc.cols > MAXCOLS && laid.length < cols ? Math.round((cols - laid.length) * (RW + PGAP) / 2) : 0), p = 'p' + (l.num + 1) + '_';
+      out.push({ id: p + 'frame', type: 'rectangle', x: ox, y: y, width: RW, height: H, strokeWidth: 3 });
+      out.push({ id: p + 'title', type: 'text', x: ox + Math.round((RW - l.hs.w) / 2), y: y + 9, text: l.head, fontSize: FS, textAlign: 'center' });
+      out.push({ id: p + 'rule', type: 'line', x: ox, y: y + l.top - 4, points: [[0, 0], [RW, 0]], strokeWidth: 2 });
       shift(l.body.els, ox, y + l.top + 8);
       out = out.concat(l.body.els);
     });
     y += H + PGAP;
   });
-  return out;
+  return out.concat(crossArrows(doc, cross, file));
+}
+
+// How far a panel body pokes out of a panel W wide (left plus right), so the
+// frame can grow by that much; the layout centres its items, so growth is shared.
+function overflow(els, W) {
+  var lo = M, hi = W - M;
+  els.forEach(function (e) {
+    if (typeof e.x !== 'number' || e.type === 'line' || e.type === 'arrow' || e.containerId) return;
+    var w = typeof e.width === 'number' ? e.width : e.type === 'text' && typeof e.text === 'string' ? size(e.text, e.fontSize || FS).w : 0;
+    lo = Math.min(lo, e.x); hi = Math.max(hi, e.x + w);
+  });
+  return Math.ceil((M - lo) + (hi - (W - M)));
+}
+
+// Arrows whose ends sit in different panels (or are written at the top level):
+// an id resolves to the arrow's own panel first, then to the one panel that declares it.
+function crossArrows(doc, cross, file) {
+  if (!cross.length) return [];
+  var where = {};
+  doc.panels.forEach(function (p, i) {
+    p.stmts.forEach(function (st) { if (st.id && (st.kind === 'box' || st.kind === 'figure')) (where[st.id] = where[st.id] || []).push('p' + (i + 1) + '_'); });
+  });
+  var mk = Maker('x');
+  cross.forEach(function (c) {
+    var e = c.e;
+    var res = function (id) {
+      var at = where[id] || [];
+      if (c.scope && at.indexOf(c.scope) >= 0) return c.scope + id;
+      if (at.length === 1) return at[0] + id;
+      if (!at.length) fail(file, e.line, '', '"' + id + '" is not a box or figure in any panel', 'declare it first:  ' + id + ': box "Label"   (boxes in panels: ' + (Object.keys(where).join(', ') || 'none') + ')');
+      fail(file, e.line, '', '"' + id + '" is declared in panels ' + at.map(function (s) { return s.slice(1, -1); }).join(', ') + ', so this arrow cannot tell which one it means', 'give each its own id (' + id + '1, ' + id + '2), or write the arrow inside the panel that holds both ends');
+    };
+    var fa = res(e.from), fb = res(e.to);
+    var col = e.marker && MARKERS[e.marker];
+    // the label rides on the arrow itself: between panels there is no free room beside it
+    var arrow = { id: fa + '_to_' + fb, type: 'arrow', start: { id: fa }, end: { id: fb }, strokeColor: col ? col.ink : INK, strokeWidth: e.bold ? 4 : 2 };
+    if (e.label) arrow.label = { text: wrap(e.label, chars(110, e.small ? SMALL : FS)), fontSize: e.small ? SMALL : FS };
+    mk.push(arrow);
+  });
+  return mk.els;
 }
 
 export function sketchToSkeleton(source, file) {
