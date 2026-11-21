@@ -39,6 +39,8 @@ CARD (the rules writers get wrong; details in the sections below)
   .mmd sequence    sequenceDiagram, <= 5 participants with short aliases
                    (participant A as API). Messages <= ~30 chars; put detail in
                    a Note. Lint f fails a diagram that prints under 8 pt.
+                   Known issue: messages are drawn stacked under the heads;
+                   check --review, or draw it as a flowchart TD instead.
   .c2m sketch      strip 1|2|3 cols (never 4+) · panel "T" · indent = inside
                    the panel · id: box "L" · id: figure [mood] [pose]
                    id says "t" (figure or box, but not an @top box)

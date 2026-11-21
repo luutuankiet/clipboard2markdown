@@ -113,6 +113,7 @@ c2m excalidraw --png --strict flow.mmd    # draw only if the lint is clean
 
 ```bash
 c2m excalidraw --png shot.doodle.json     # {"image": "shot.png", "notes": [{"text": "...", "target": [10, 20, 300, 40]}]}
+c2m excalidraw --png shot.doodle.json     # or name the target by its text: {"text": "...", "at": "Password"}, read from shot.png.boxes.json beside the PNG
 ```
 
 ## Demo
